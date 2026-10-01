@@ -26,6 +26,7 @@ public class ProfileAndSettingsController(
     {
         var user = await users.GetUserAsync(User);
         if (user == null) return Challenge();
+        model.Notifications = NotificationPreferencesViewModel.FromUser(user);
         if (!ModelState.IsValid) return View("Index", model);
         var result = await profiles.UpdateAsync(user, model);
         if (!result.Succeeded)
@@ -37,4 +38,24 @@ public class ProfileAndSettingsController(
         TempData["SuccessMessage"] = "Profile updated successfully.";
         return RedirectToAction(nameof(Index));
     }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UpdateNotifications(NotificationPreferencesViewModel model)
+    {
+        var user = await users.GetUserAsync(User);
+        if (user == null) return Challenge();
+        if (!ModelState.IsValid)
+        {
+            TempData["ErrorMessage"] = "Unable to save notification preferences. Please try again.";
+            return RedirectToAction(nameof(Index));
+        }
+
+        var result = await profiles.UpdateNotificationPreferencesAsync(user, model);
+        TempData[result.Succeeded ? "SuccessMessage" : "ErrorMessage"] = result.Succeeded
+            ? "Notification preferences saved. Your notification feed has been updated."
+            : "Notification preferences could not be saved. Reload the page and try again.";
+        return RedirectToAction(nameof(Index));
+    }
+
 }

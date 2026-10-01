@@ -2,12 +2,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
+using System.Security.Claims;
 using HomeServeIT.Web.Constants;
 using HomeServeIT.Web.Data;
 using HomeServeIT.Web.Models;
-using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
+using HomeServeIT.Web.Services;
 
 namespace HomeServeIT.Web.Areas.Admin.Controllers
 {
@@ -16,10 +15,12 @@ namespace HomeServeIT.Web.Areas.Admin.Controllers
     public class CrmController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly ReportingModule _reporting;
 
-        public CrmController(ApplicationDbContext context)
+        public CrmController(ApplicationDbContext context, ReportingModule reporting)
         {
             _context = context;
+            _reporting = reporting;
         }
 
         public async Task<IActionResult> Customers()
@@ -126,243 +127,35 @@ namespace HomeServeIT.Web.Areas.Admin.Controllers
 
         public async Task<IActionResult> Reports()
         {
-            var now = DateTime.UtcNow;
-            var thirtyDaysAgo = now.AddDays(-30);
-            var sixtyDaysAgo = now.AddDays(-60);
-
-            // Revenue calculation
-            var invoicesLast30 = await _context.Invoices
-                .Where(i => i.PaymentStatus == "Paid" && i.DateIssued >= thirtyDaysAgo)
-                .ToListAsync();
-            var revenueLast30 = invoicesLast30.Sum(i => i.TotalAmount);
-
-            var invoicesPrev30 = await _context.Invoices
-                .Where(i => i.PaymentStatus == "Paid" && i.DateIssued >= sixtyDaysAgo && i.DateIssued < thirtyDaysAgo)
-                .ToListAsync();
-            var revenuePrev30 = invoicesPrev30.Sum(i => i.TotalAmount);
-            
-            var revenueGrowth = revenuePrev30 == 0 ? (revenueLast30 > 0 ? 100 : 0) : (double)((revenueLast30 - revenuePrev30) / revenuePrev30) * 100;
-
-            // Jobs completed calculation
-            var jobsLast30 = await _context.ServiceRequests
-                .Where(r => r.Status == "Completed" && r.CompletedDate != null && r.CompletedDate >= thirtyDaysAgo)
-                .ToListAsync();
-            var completedJobsLast30 = jobsLast30.Count;
-
-            var jobsPrev30 = await _context.ServiceRequests
-                .Where(r => r.Status == "Completed" && r.CompletedDate != null && r.CompletedDate >= sixtyDaysAgo && r.CompletedDate < thirtyDaysAgo)
-                .ToListAsync();
-            var completedJobsPrev30 = jobsPrev30.Count;
-
-            var jobsGrowth = completedJobsPrev30 == 0 ? (completedJobsLast30 > 0 ? 100 : 0) : (double)(completedJobsLast30 - completedJobsPrev30) / completedJobsPrev30 * 100;
-
-            // Average resolution time
-            var avgResLast30 = HomeServeIT.Web.Services.CompletionTiming.AverageDays(jobsLast30);
-            var avgResPrev30 = HomeServeIT.Web.Services.CompletionTiming.AverageDays(jobsPrev30);
-            var resTimeChange = avgResLast30 - avgResPrev30;
-
-            // Jobs by category (Last 30 days)
-            var jobsByCategory = jobsLast30
-                .GroupBy(r => r.ServiceCategory ?? "Other")
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            // Revenue Trend (Last 6 months)
-            var sixMonthsAgo = now.AddMonths(-6);
-            var invoicesLast6Months = await _context.Invoices
-                .Where(i => i.PaymentStatus == "Paid" && i.DateIssued >= sixMonthsAgo)
-                .ToListAsync();
-
-            var revenueTrend = new List<decimal>();
-            var revenueLabels = new List<string>();
-
-            for (int i = 5; i >= 0; i--)
-            {
-                var monthStart = new DateTime(now.Year, now.Month, 1).AddMonths(-i);
-                var monthEnd = monthStart.AddMonths(1);
-                var monthRevenue = invoicesLast6Months
-                    .Where(inv => inv.DateIssued >= monthStart && inv.DateIssued < monthEnd)
-                    .Sum(inv => inv.TotalAmount);
-                
-                revenueTrend.Add(monthRevenue);
-                revenueLabels.Add(monthStart.ToString("MMM"));
-            }
-
-            var model = new ReportsViewModel
-            {
-                TotalJobsCompleted = completedJobsLast30,
-                RevenueLast30Days = revenueLast30,
-                RevenueGrowthPercentage = Math.Round(revenueGrowth, 1),
-                JobsCompletedGrowthPercentage = (int)Math.Round(jobsGrowth),
-                AvgResolutionTimeDays = Math.Round(avgResLast30, 1),
-                ResolutionTimeChangeDays = Math.Round(resTimeChange, 1),
-                JobsByCategory = jobsByCategory,
-                RevenueTrend = revenueTrend,
-                RevenueLabels = revenueLabels,
-                RecentReports = new List<RecentReportItem>()
-            };
-            
-            return View(model);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return View(await _reporting.GetOverviewAsync(userId, DateTime.UtcNow));
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> DownloadReport(string type = "Full Summary", string? dateRange = "30", DateTime? startDate = null, DateTime? endDate = null)
         {
-            var now = DateTime.UtcNow;
-            DateTime currentStart, currentEnd, previousStart, previousEnd;
+            var result = await _reporting.GenerateAsync(
+                new ReportGenerationRequest(type, dateRange, startDate, endDate),
+                User.FindFirstValue(ClaimTypes.NameIdentifier),
+                DateTime.UtcNow);
+            if (result.RequiresAuthorization) return Unauthorized();
+            if (!result.Succeeded) return BadRequest(result.ErrorMessage);
 
-            if (dateRange == "custom" && startDate.HasValue && endDate.HasValue)
-            {
-                currentStart = startDate.Value;
-                currentEnd = endDate.Value.AddDays(1).AddTicks(-1);
-                var duration = currentEnd - currentStart;
-                previousStart = currentStart - duration;
-                previousEnd = currentStart;
-            }
-            else if (dateRange == "7")
-            {
-                currentStart = now.AddDays(-7);
-                currentEnd = now;
-                previousStart = now.AddDays(-14);
-                previousEnd = currentStart;
-            }
-            else if (dateRange == "90")
-            {
-                currentStart = now.AddDays(-90);
-                currentEnd = now;
-                previousStart = now.AddDays(-180);
-                previousEnd = currentStart;
-            }
-            else
-            {
-                // Default: 30 days
-                currentStart = now.AddDays(-30);
-                currentEnd = now;
-                previousStart = now.AddDays(-60);
-                previousEnd = currentStart;
-            }
-
-            // Real DB calculations
-            var revCurrent = await _context.Invoices
-                .Where(i => i.PaymentStatus == "Paid" && i.DateIssued >= currentStart && i.DateIssued <= currentEnd)
-                .SumAsync(i => (decimal?)i.TotalAmount) ?? 0;
-
-            var revPrev = await _context.Invoices
-                .Where(i => i.PaymentStatus == "Paid" && i.DateIssued >= previousStart && i.DateIssued < previousEnd)
-                .SumAsync(i => (decimal?)i.TotalAmount) ?? 0;
-
-            var revGrowth = revPrev == 0 ? (revCurrent > 0 ? "+100%" : "0.0%") : $"{(revCurrent - revPrev) / revPrev:P1}";
-
-            var jobsCurrent = await _context.ServiceRequests
-                .CountAsync(r => r.Status == "Completed" && (r.CompletedDate.HasValue && r.CompletedDate.Value >= currentStart && r.CompletedDate.Value <= currentEnd));
-
-            var jobsPrev = await _context.ServiceRequests
-                .CountAsync(r => r.Status == "Completed" && (r.CompletedDate.HasValue && r.CompletedDate.Value >= previousStart && r.CompletedDate.Value < previousEnd));
-
-            var jobsGrowth = jobsPrev == 0 ? (jobsCurrent > 0 ? "+100%" : "0.0%") : $"{(jobsCurrent - jobsPrev) / (double)jobsPrev:P1}";
-
-            var completedRequests = await _context.ServiceRequests
-                .Where(r => r.Status == "Completed" && r.CompletedDate.HasValue && r.CompletedDate.Value >= currentStart && r.CompletedDate.Value <= currentEnd)
-                .ToListAsync();
-
-            var prevCompletedRequests = await _context.ServiceRequests
-                .Where(r => r.Status == "Completed" && r.CompletedDate.HasValue && r.CompletedDate.Value >= previousStart && r.CompletedDate.Value < previousEnd)
-                .ToListAsync();
-
-            var avgResolutionDays = HomeServeIT.Web.Services.CompletionTiming.AverageDays(completedRequests);
-            var prevAvgResolutionDays = HomeServeIT.Web.Services.CompletionTiming.AverageDays(prevCompletedRequests);
-
-            var resTrend = avgResolutionDays > 0 && prevAvgResolutionDays > 0 ? $"{(avgResolutionDays - prevAvgResolutionDays):+0.0;-0.0;0.0} Days" : "—";
-
-            var document = Document.Create(container =>
-            {
-                container.Page(page =>
-                {
-                    page.Size(PageSizes.A4);
-                    page.Margin(2, Unit.Centimetre);
-                    page.PageColor(Colors.White);
-                    page.DefaultTextStyle(x => x.FontSize(11));
-
-                    page.Header().Element(compose => ComposeHeader(compose, type, currentStart, currentEnd));
-                    page.Content().Element(compose => ComposeContent(compose, type, revCurrent, revPrev, revGrowth, jobsCurrent, jobsPrev, jobsGrowth, avgResolutionDays, prevAvgResolutionDays, resTrend));
-                    page.Footer().AlignCenter().Text(x =>
-                    {
-                        x.Span("Page ");
-                        x.CurrentPageNumber();
-                        x.Span(" of ");
-                        x.TotalPages();
-                    });
-                });
-            });
-
-            var pdfBytes = document.GeneratePdf();
-            return File(pdfBytes, "application/pdf", $"{type.Replace(" ", "_")}_Report_{DateTime.UtcNow:yyyyMMdd}.pdf");
+            Response.Headers.CacheControl = "no-store";
+            return File(result.PdfContent!, "application/pdf", result.FileName);
         }
 
-        private void ComposeHeader(IContainer container, string type, DateTime start, DateTime end)
+        [HttpGet]
+        public async Task<IActionResult> DownloadRecentReport(int id)
         {
-            container.Row(row =>
-            {
-                row.RelativeItem().Column(column =>
-                {
-                    column.Item().Text("HomeServe IT").FontSize(22).Bold().FontColor("#0878f9");
-                    column.Item().Text($"Report: {type}").FontSize(14).SemiBold().FontColor(Colors.Grey.Darken3);
-                    column.Item().Text($"Period: {start:MMM d, yyyy} – {end:MMM d, yyyy} | Generated: {DateTime.Now:MMM d, yyyy}").FontSize(10).FontColor(Colors.Grey.Medium);
-                });
-            });
-        }
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+            var report = await _reporting.GetRecentReportAsync(id, userId);
+            if (report == null) return NotFound();
 
-        private void ComposeContent(IContainer container, string type, decimal revCurrent, decimal revPrev, string revGrowth, int jobsCurrent, int jobsPrev, string jobsGrowth, double avgRes, double prevAvgRes, string resTrend)
-        {
-            container.PaddingVertical(1, Unit.Centimetre).Column(column =>
-            {
-                column.Spacing(20);
-                
-                column.Item().Text("Executive Summary").FontSize(14).SemiBold();
-                column.Item().Text($"This document contains the {type} report generated automatically from live HomeServe IT system records. It reflects actual completed services, verified billing, and operational performance metrics.");
-
-                column.Item().Table(table =>
-                {
-                    table.ColumnsDefinition(columns =>
-                    {
-                        columns.RelativeColumn(2);
-                        columns.RelativeColumn(2);
-                        columns.RelativeColumn(2);
-                        columns.RelativeColumn(1.5f);
-                    });
-
-                    table.Header(header =>
-                    {
-                        header.Cell().Element(CellStyle).Text("Metric");
-                        header.Cell().Element(CellStyle).Text("Current Period");
-                        header.Cell().Element(CellStyle).Text("Previous Period");
-                        header.Cell().Element(CellStyle).Text("Trend");
-
-                        static IContainer CellStyle(IContainer container)
-                        {
-                            return container.DefaultTextStyle(x => x.SemiBold()).PaddingVertical(6).BorderBottom(1.5f).BorderColor(Colors.Grey.Darken2);
-                        }
-                    });
-
-                    table.Cell().Element(CellStyle).Text("Total Revenue");
-                    table.Cell().Element(CellStyle).Text(revCurrent.ToString("C2", new System.Globalization.CultureInfo("en-PH")));
-                    table.Cell().Element(CellStyle).Text(revPrev.ToString("C2", new System.Globalization.CultureInfo("en-PH")));
-                    table.Cell().Element(CellStyle).Text(revGrowth);
-
-                    table.Cell().Element(CellStyle).Text("Jobs Completed");
-                    table.Cell().Element(CellStyle).Text(jobsCurrent.ToString());
-                    table.Cell().Element(CellStyle).Text(jobsPrev.ToString());
-                    table.Cell().Element(CellStyle).Text(jobsGrowth);
-
-                    table.Cell().Element(CellStyle).Text("Avg scheduled-to-completion days (valid dates)");
-                    table.Cell().Element(CellStyle).Text(avgRes > 0 ? $"{avgRes:0.0} Days" : "—");
-                    table.Cell().Element(CellStyle).Text(prevAvgRes > 0 ? $"{prevAvgRes:0.0} Days" : "—");
-                    table.Cell().Element(CellStyle).Text(resTrend);
-
-                    static IContainer CellStyle(IContainer container)
-                    {
-                        return container.BorderBottom(1).BorderColor(Colors.Grey.Lighten2).PaddingVertical(6);
-                    }
-                });
-            });
+            Response.Headers.CacheControl = "no-store";
+            return File(report.PdfContent, "application/pdf", report.FileName);
         }
     }
 }

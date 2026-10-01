@@ -133,6 +133,38 @@ public sealed class AccountProfileServiceTests
     }
 
     [Fact]
+    public async Task OpeningTrayClearsOnlyCurrentUsersExistingNotifications()
+    {
+        await using var database = await SqliteTestDatabase.CreateAsync();
+        await using var provider = Services(database);
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var fixture = await TestDataBuilder.SeedRoleAccountsAsync(context);
+        var openedAt = DateTime.UtcNow;
+        UserNotification Alert(string recipient, string role, DateTime created) => new()
+        {
+            RecipientUserID = recipient, AudienceRole = role, CreatedAt = created,
+            SourceKey = Guid.NewGuid().ToString(), Title = "Account update"
+        };
+        var existing = Alert(fixture.CustomerUser.Id, Roles.Customer, openedAt.AddSeconds(-1));
+        var arriving = Alert(fixture.CustomerUser.Id, Roles.Customer, openedAt.AddSeconds(1));
+        var otherUser = Alert(fixture.TechnicianUser.Id, Roles.Technician, openedAt.AddSeconds(-1));
+        var otherRole = Alert(fixture.CustomerUser.Id, Roles.Administrator, openedAt.AddSeconds(-1));
+        context.UserNotifications.AddRange(existing, arriving, otherUser, otherRole);
+        await context.SaveChangesAsync();
+        var service = new NotificationService(context, scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>());
+        await service.MarkAllReadAsync(fixture.CustomerUser, openedAt);
+        Assert.True(existing.IsRead);
+        Assert.NotNull(existing.ReadAt);
+        Assert.False(arriving.IsRead);
+        Assert.False(otherUser.IsRead);
+        Assert.False(otherRole.IsRead);
+        Assert.Equal(1, (await service.GetFeedAsync(fixture.CustomerUser)).UnreadCount);
+        await service.MarkAllReadAsync(fixture.CustomerUser, openedAt.AddSeconds(2));
+        Assert.Equal(0, (await service.GetFeedAsync(fixture.CustomerUser)).UnreadCount);
+    }
+
+    [Fact]
     public async Task InvalidPasswordRollsBackEmailRoleAndDomainChanges()
     {
         await using var database = await SqliteTestDatabase.CreateAsync();

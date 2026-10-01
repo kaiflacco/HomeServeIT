@@ -53,6 +53,28 @@ public class NotificationActionsController : Controller
         return target == null ? RedirectToRoleHome() : LocalRedirect(target);
     }
 
+    [HttpGet("unread-count")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> UnreadCount()
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null) return Unauthorized();
+        return Json(new { unreadCount = (await _notifications.GetFeedAsync(user, take: 0)).UnreadCount });
+    }
+
+    [HttpPost("tray-open")]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> OpenTray()
+    {
+        var openedAt = DateTime.UtcNow;
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null) return Unauthorized();
+
+        // Keep alerts arriving after this click unread for the next badge.
+        await _notifications.MarkAllReadAsync(user, openedAt);
+        return Json(new { unreadCount = (await _notifications.GetFeedAsync(user, take: 0)).UnreadCount });
+    }
+
     private IActionResult RedirectBack(string? returnUrl) =>
         Url.IsLocalUrl(returnUrl) ? LocalRedirect(returnUrl!) : RedirectToRoleHome();
 

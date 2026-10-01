@@ -46,6 +46,16 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 builder.Services.AddControllersWithViews();
 builder.Services.AddSignalR();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<HomeServeIT.Web.Services.WeatherService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(5);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("HomeServeIT/1.0");
+});
+builder.Services.Configure<HomeServeIT.Web.Services.WeatherApiOptions>(
+    builder.Configuration.GetSection("WeatherApi"));
+builder.Services.AddTransient(sp =>
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<HomeServeIT.Web.Services.WeatherApiOptions>>().Value);
 builder.Services.AddScoped<HomeServeIT.Web.Services.NotificationService>();
 builder.Services.AddScoped<HomeServeIT.Web.Services.ApplicationSettingsService>();
 builder.Services.AddHostedService<HomeServeIT.Web.Services.NotificationWorker>();
@@ -53,6 +63,7 @@ builder.Services.AddScoped<HomeServeIT.Web.Services.JobInventoryService>();
 builder.Services.AddScoped<HomeServeIT.Web.Services.InventoryCatalogService>();
 builder.Services.AddScoped<HomeServeIT.Web.Services.TechnicianAssignmentService>();
 builder.Services.AddScoped<HomeServeIT.Web.Services.AccountProfileService>();
+builder.Services.AddScoped<HomeServeIT.Web.Services.ReportingModule>();
 builder.Services.AddScoped<HomeServeIT.Web.Services.PrivateUploadService>();
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = HomeServeIT.Web.Services.PrivateUploadService.MaxRequestBytes);
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
@@ -113,6 +124,26 @@ using (var scope = app.Services.CreateScope())
         Console.WriteLine(deleteOnly ? "Disposable test database deleted." : "Disposable test database reset and seeded.");
         return;
     }
+    if (args.Contains("--seed-recent-activity"))
+    {
+        DemoDataSeeder.RequireSafeTarget(scope.ServiceProvider, app.Environment);
+        var useCurrentModel = builder.Configuration.GetValue<bool?>("BusinessData:UseCurrentModel")
+            ?? builder.Configuration.GetValue<bool?>("DemoData:UseCurrentModel");
+        await DbInitializer.InitializeAsync(scope.ServiceProvider, app.Environment, useCurrentModel, "homeserve_demo_");
+        await RecentActivitySeeder.SeedAsync(scope.ServiceProvider, app.Environment);
+        return;
+    }
+    if (args.Contains("--seed-business-data") || args.Contains("--seed-demo-data"))
+    {
+        DemoDataSeeder.RequireSafeTarget(scope.ServiceProvider, app.Environment);
+        var useCurrentModel = builder.Configuration.GetValue<bool?>("BusinessData:UseCurrentModel")
+            ?? builder.Configuration.GetValue<bool?>("DemoData:UseCurrentModel");
+        await DbInitializer.InitializeAsync(scope.ServiceProvider, app.Environment, useCurrentModel, "homeserve_demo_");
+        await DemoDataSeeder.SeedAsync(scope.ServiceProvider, app.Environment);
+        await BusinessActivitySeeder.SeedAsync(scope.ServiceProvider, app.Environment);
+        await RecentActivitySeeder.SeedAsync(scope.ServiceProvider, app.Environment);
+        return;
+    }
     if (args.Contains("--check-completion-dates"))
     {
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -131,7 +162,15 @@ using (var scope = app.Services.CreateScope())
         return; // Explicit deployment/maintenance action, never normal production startup.
     }
     if (app.Environment.IsDevelopment())
-        await DbInitializer.InitializeAsync(scope.ServiceProvider, app.Environment);
+    {
+        var useDemoCurrentModel = builder.Configuration.GetValue<bool>("BusinessData:UseCurrentModel")
+            || builder.Configuration.GetValue<bool>("DemoData:UseCurrentModel");
+        await DbInitializer.InitializeAsync(
+            scope.ServiceProvider,
+            app.Environment,
+            useDemoCurrentModel ? true : null,
+            useDemoCurrentModel ? "homeserve_demo_" : null);
+    }
 }
 
 app.Run();

@@ -4,7 +4,7 @@
 }
 
 <div x-data="{
-    activeTab: 'all', selectedTech: 'all', showRequestModal: false, newRequestCategory: 'Other', reassignModalOpen: false,
+    activeTab: 'all', selectedTech: 'all', searchTerm: '', showRequestModal: false, newRequestCategory: 'Other', reassignModalOpen: false,
     currentRequestId: null, currentTechId: null,
     drawerOpen: false, drawerReq: null,
     cancelModalOpen: false, cancelRequestId: null,
@@ -13,6 +13,14 @@
     chatModalOpen: false, chatLogs: [], currentAdminId: 'Admin',
     openDrawer(r) { this.drawerReq = r; this.drawerOpen = true; },
     openCancelModal(id) { this.cancelRequestId = id; this.cancelModalOpen = true; },
+    hasActiveFilters() { return this.activeTab !== 'all' || this.selectedTech !== 'all' || this.searchTerm.trim() !== ''; },
+    hasVisibleRequests() {
+        const query = this.searchTerm.trim().toLowerCase();
+        return Array.from(this.$refs.requestTable?.querySelectorAll('tr[data-search]') || []).some(row =>
+            (this.activeTab === 'all' || this.activeTab === row.dataset.tab)
+            && (this.selectedTech === 'all' || this.selectedTech === row.dataset.tech)
+            && (!query || row.dataset.search.includes(query)));
+    },
     async openChatLogs(reqId) {
         this.currentReqId = reqId;
         const res = await fetch(`/Admin/Operations/GetChatLogs?requestId=${reqId}`);
@@ -40,9 +48,9 @@
     </div>
     
     <!-- Filters Row -->
-    <div class="flex items-center justify-between w-full mt-8">
+    <div class="flex flex-col gap-3 w-full mt-8 lg:flex-row lg:items-center lg:justify-between">
         <!-- Tabs -->
-        <div class="flex items-center gap-2 bg-white border border-[#e7eaf0] rounded-[12px] p-1 shadow-sm w-fit">
+        <div class="flex max-w-full items-center gap-2 overflow-x-auto bg-white border border-[#e7eaf0] rounded-[12px] p-1 shadow-sm w-fit">
             <button @@click="activeTab = 'all'" :class="{ 'bg-white border-[#e7eaf0] shadow-sm text-[#17191c]': activeTab === 'all', 'border-transparent text-[#5d6470] hover:bg-gray-50': activeTab !== 'all' }" class="flex items-center gap-2 px-3 py-1.5 border rounded-[8px] transition-colors">
                 <span class="font-['Inter'] font-[550] text-[13px]">All</span>
                 <span :class="{ 'bg-[#edf5ff] text-[#0878f9]': activeTab === 'all', 'bg-gray-100 text-[#8a929e]': activeTab !== 'all' }" class="text-[11px] font-bold px-1.5 py-0.5 rounded-full">@Model.Count(r => !r.IsArchived)</span>
@@ -65,10 +73,22 @@
             </button>
         </div>
 
-        <!-- Tech Filter -->
-        <div class="flex items-center gap-3">
-            <label class="font-['Inter'] text-[13px] font-medium text-[#5d6470]">Filter by Technician:</label>
-            <select x-model="selectedTech" class="ui-select !w-auto text-[13px]">
+        <!-- Search and Tech Filters -->
+        <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-end lg:w-auto">
+            <div class="relative w-full sm:w-[280px]">
+                <label for="service-request-search" class="sr-only">Search jobs and requests</label>
+                <svg class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a929e]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input id="service-request-search" type="search" x-model="searchTerm" placeholder="Search jobs, customers, technicians…" autocomplete="off" class="h-10 w-full rounded-[10px] border border-[#dfe4eb] bg-white pl-9 pr-9 text-[13px] text-[#17191c] shadow-sm outline-none transition focus:border-[#0878f9] focus:ring-4 focus:ring-blue-100" />
+                <button type="button" x-show="searchTerm" x-cloak @@click="searchTerm = ''" aria-label="Clear search" class="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-[#8a929e] hover:bg-gray-100 hover:text-[#17191c]">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="flex min-w-0 flex-1 flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                <label for="technician-filter" class="shrink-0 font-['Inter'] text-[13px] font-medium text-[#5d6470]">Filter by technician</label>
+                <select id="technician-filter" x-model="selectedTech" class="ui-select !w-[240px] max-w-full text-[13px]">
                 <option value="all">All Technicians</option>
                 <option value="unassigned">Unassigned</option>
                 @if (ViewBag.Technicians != null)
@@ -82,7 +102,8 @@
                         }
                     }
                 }
-            </select>
+                </select>
+            </div>
         </div>
     </div>
     
@@ -100,7 +121,7 @@
                     <th class="py-4 px-6 font-['Inter'] font-[650] text-[11px] text-[#8a929e] uppercase tracking-wider text-right">Actions</th>
                 </tr>
             </thead>
-            <tbody class="font-['Inter'] text-[13px] text-[#17191c]">
+            <tbody x-ref="requestTable" class="font-['Inter'] text-[13px] text-[#17191c]">
                 
                 @foreach (var request in Model)
                 {
@@ -120,8 +141,9 @@
                         ? "T"
                         : $"{(string.IsNullOrWhiteSpace(request.Technician.FirstName) ? "" : request.Technician.FirstName[..1])}{(string.IsNullOrWhiteSpace(request.Technician.LastName) ? "" : request.Technician.LastName[..1])}";
                     if (string.IsNullOrWhiteSpace(technicianInitials)) technicianInitials = "T";
+                    var searchText = $"JOB-{request.ScheduledDate.Year}-{request.RequestID:D4} {request.Customer?.FirstName} {request.Customer?.LastName} {request.IssueDescription} {request.ServiceCategory} {request.Priority} {request.Status} {request.Technician?.FirstName} {request.Technician?.LastName} {request.Technician?.Specialty}";
 
-                    <tr data-tab="@actualTab" data-tech="@techValue" x-show="(activeTab === 'all' || activeTab === $el.dataset.tab) && (selectedTech === 'all' || selectedTech === $el.dataset.tech)" class="border-b border-[#e7eaf0] last:border-0 hover:bg-blue-50/20 transition-colors cursor-pointer" data-request="@HomeServeIT.Web.Models.ServiceRequestUiData.Serialize(request)" @@click="openDrawer(JSON.parse($el.dataset.request))">
+                    <tr data-tab="@actualTab" data-tech="@techValue" data-search="@searchText" x-show="(activeTab === 'all' || activeTab === $el.dataset.tab) && (selectedTech === 'all' || selectedTech === $el.dataset.tech) && (searchTerm.trim() === '' || $el.dataset.search.toLowerCase().includes(searchTerm.trim().toLowerCase()))" class="border-b border-[#e7eaf0] last:border-0 hover:bg-blue-50/20 transition-colors cursor-pointer" data-request="@HomeServeIT.Web.Models.ServiceRequestUiData.Serialize(request)" @@click="openDrawer(JSON.parse($el.dataset.request))">
                         <td class="py-4 px-6 font-['JetBrains_Mono'] font-medium text-[#0878f9]">JOB-@request.ScheduledDate.Year-@request.RequestID.ToString("D4")</td>
                         <td class="py-4 px-6">
                             <p class="font-semibold text-[#17191c]">@request.Customer?.FirstName @request.Customer?.LastName</p>
@@ -258,6 +280,9 @@
                         <td colspan="7" class="py-8 text-center text-[#8a929e] font-['Inter']">No requests found.</td>
                     </tr>
                 }
+                <tr x-show="hasActiveFilters() && !hasVisibleRequests()" x-cloak>
+                    <td colspan="7" class="py-8 text-center text-[#8a929e] font-['Inter']">No jobs match the selected filters.</td>
+                </tr>
 
             </tbody>
         </table>

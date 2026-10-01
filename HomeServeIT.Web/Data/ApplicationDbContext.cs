@@ -21,6 +21,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<UserNotification> UserNotifications { get; set; }
     public DbSet<ApplicationSetting> ApplicationSettings { get; set; }
     public DbSet<ApplicationSettingAudit> ApplicationSettingAudits { get; set; }
+    public DbSet<GeneratedReport> GeneratedReports { get; set; }
 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
@@ -127,5 +128,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .WithMany()
             .HasForeignKey(a => a.ActorUserId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Entity<GeneratedReport>()
+            .HasOne(report => report.GeneratedByUser)
+            .WithMany()
+            .HasForeignKey(report => report.GeneratedByUserID)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<GeneratedReport>()
+            .HasIndex(report => new { report.GeneratedByUserID, report.GeneratedAtUtc });
     }
 }

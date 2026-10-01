@@ -19,11 +19,11 @@ public class NotificationsController : Controller
         _userManager = userManager;
     }
 
-    public async Task<IActionResult> Index(string? category)
+    public async Task<IActionResult> Index(string? category, int page = 1)
     {
         var user = await _userManager.GetUserAsync(User);
         if (user == null) return Challenge();
 
-        return View(await _notifications.GetFeedAsync(user, category));
+        return View(await _notifications.GetFeedAsync(user, category, page: page));
     }
 }

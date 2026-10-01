@@ -1,4 +1,5 @@
 using HomeServeIT.Web.Models;
+using HomeServeIT.Web.Services;
 
 namespace HomeServeIT.Web.Areas.Technician.Models
 {
@@ -9,6 +10,7 @@ namespace HomeServeIT.Web.Areas.Technician.Models
         public int TotalCompleted { get; set; }
         public List<ServiceRequest> TodaysJobs { get; set; } = new();
         public List<ServiceRequest> UpcomingJobs { get; set; } = new();
+        public WeatherSnapshot? NextJobWeather { get; set; }
     }
 
     public class TechnicianAssignedJobsViewModel

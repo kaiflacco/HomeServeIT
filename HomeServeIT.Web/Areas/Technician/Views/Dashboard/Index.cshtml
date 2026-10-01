@@ -126,6 +126,52 @@
         </div>
     </div>
 
+    @if (Model.NextJobWeather is { } dashboardWeather)
+    {
+        <div class="w-full rounded-3xl border border-sky-100 bg-gradient-to-r from-sky-50 via-white to-indigo-50/60 p-5 shadow-xs">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-sky-100 bg-white text-sky-600 shadow-2xs">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                    </div>
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h2 class="font-['Inter'] text-base font-bold text-[#17191c]">Live Weather</h2>
+                            <span class="rounded-full border border-sky-100 bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-700">@dashboardWeather.LocationName</span>
+                        </div>
+                        <p class="mt-0.5 text-xs text-[#5d6470]">@dashboardWeather.CurrentSummary · feels like @dashboardWeather.CurrentFeelsLikeCelsius.ToString("0.#")°C</p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-x-5 gap-y-2 sm:justify-end">
+                    <div>
+                        <span class="block text-[10px] font-bold uppercase tracking-wider text-[#8a929e]">Now</span>
+                        <span class="font-['JetBrains_Mono'] text-2xl font-bold text-[#17191c]">@dashboardWeather.CurrentTemperatureCelsius.ToString("0.#")°C</span>
+                    </div>
+                    @if (dashboardWeather.LastUpdatedLocal is DateTime weatherUpdated)
+                    {
+                        <span class="text-xs text-[#5d6470]">Updated @weatherUpdated.ToString("h:mm tt")</span>
+                    }
+                    @if (dashboardWeather.VisitSummary is not null)
+                    {
+                        <div class="border-l border-sky-100 pl-4">
+                            <span class="block text-[10px] font-bold uppercase tracking-wider text-[#8a929e]">Visit forecast</span>
+                            <span class="text-xs font-semibold text-[#17191c]">@dashboardWeather.VisitSummary
+                                @if (dashboardWeather.VisitPrecipitationProbabilityPercent is int rainChance)
+                                {
+                                    <span class="font-normal text-[#5d6470]"> · Rain @rainChance%</span>
+                                }
+                            </span>
+                        </div>
+                    }
+                </div>
+            </div>
+            <p class="mt-3 text-[10px] leading-relaxed text-sky-800/70">
+                Weather data by <a href="https://www.weatherapi.com/" target="_blank" rel="noopener noreferrer" class="underline">WeatherAPI.com</a>. For general information only; do not use as the sole basis for safety-critical decisions.
+            </p>
+        </div>
+    }
+
     <!-- Active Spotlight: Next Up Focus Card -->
     @if (nextJob != null)
     {

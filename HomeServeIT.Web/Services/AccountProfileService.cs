@@ -97,6 +97,15 @@ public sealed class AccountProfileService(ApplicationDbContext context, UserMana
         return IdentityResult.Success;
     }
 
+    public Task<IdentityResult> UpdateNotificationPreferencesAsync(ApplicationUser user, NotificationPreferencesViewModel model)
+    {
+        user.PrefApptReminders = model.JobUpdates;
+        user.PrefQuotations = model.Quotations;
+        user.PrefInvoices = model.Billing;
+        // A single atomic Identity update retains its optimistic concurrency check.
+        return users.UpdateAsync(user);
+    }
+
     // Caller owns the transaction so Identity, role and domain writes commit together.
     public async Task EnsureDomainProfileAsync(ApplicationUser user, string role, string specialty = "General service")
     {

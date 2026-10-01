@@ -22,6 +22,7 @@ HomeServeIT.Web/wwwroot/css/app.css
 HomeServeIT.Web/test-results/
 HomeServeIT.Web/playwright-report/
 HomeServeIT.Web/App_Data/
+HomeServeIT.Web/wwwroot/uploads/
 
 ## Secrets - NEVER commit these
 appsettings.Development.json
@@ -44,3 +45,8 @@ logs/
 
 ## Published output
 publish/
+
+## Local agent/tooling metadata and generated final-document exports
+.agents/
+skills-lock.json
+output/

@@ -144,6 +144,69 @@
         };
     }
 
+    function tableDataRows(table) {
+        return Array.from(table.querySelectorAll(':scope > tbody > tr'))
+            .filter(row => !row.hasAttribute('data-sort-fixed')
+                && !Array.from(row.cells).some(cell => cell.colSpan > 1));
+    }
+
+    function createTablePagination(table) {
+        const pageSize = Math.max(1, Number.parseInt(table.dataset.pageSize ?? '10', 10) || 10);
+        if (tableDataRows(table).length <= pageSize) return { reset: () => {} };
+
+        const navigation = document.createElement('nav');
+        navigation.className = 'table-pagination';
+        navigation.setAttribute('aria-label', 'Table pagination');
+        table.after(navigation);
+
+        let currentPage = 1;
+        const createButton = (label, page, disabled = false, current = false) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'table-pagination__button';
+            button.textContent = label;
+            button.disabled = disabled;
+            if (current) button.setAttribute('aria-current', 'page');
+            button.addEventListener('click', () => {
+                currentPage = page;
+                render();
+            });
+            return button;
+        };
+
+        function render() {
+            const rows = tableDataRows(table);
+            const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+            currentPage = Math.min(currentPage, totalPages);
+            const first = (currentPage - 1) * pageSize;
+            const last = Math.min(first + pageSize, rows.length);
+
+            rows.forEach((row, index) => { row.hidden = index < first || index >= last; });
+
+            const summary = document.createElement('span');
+            summary.className = 'table-pagination__summary';
+            summary.setAttribute('aria-live', 'polite');
+            summary.textContent = rows.length === 0
+                ? 'No records'
+                : `Showing ${first + 1}–${last} of ${rows.length}`;
+
+            const controls = document.createElement('div');
+            controls.className = 'table-pagination__controls';
+            controls.appendChild(createButton('Previous', currentPage - 1, currentPage === 1));
+
+            const startPage = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+            const endPage = Math.min(totalPages, startPage + 4);
+            for (let page = startPage; page <= endPage; page++)
+                controls.appendChild(createButton(page.toString(), page, false, page === currentPage));
+
+            controls.appendChild(createButton('Next', currentPage + 1, currentPage === totalPages));
+            navigation.replaceChildren(summary, controls);
+        }
+
+        render();
+        return { reset: () => { currentPage = 1; render(); } };
+    }
+
     function enhanceTable(table) {
         if (table.dataset.sortReady === 'true' || table.dataset.sortable === 'false') return;
         const headings = Array.from(table.querySelectorAll(':scope > thead th, :scope > thead td'));
@@ -164,6 +227,7 @@
         });
 
         let toolbar;
+        let pagination;
         const applySort = (columnIndex, direction) => {
             const heading = headings[columnIndex];
             if (!heading) return;
@@ -186,6 +250,7 @@
                 [...sortableRows, ...fixedRows].forEach(row => body.appendChild(row));
             });
             toolbar?.sync(columnIndex, direction);
+            pagination?.reset();
         };
 
         headings.forEach((heading, columnIndex) => {
@@ -199,6 +264,7 @@
         });
 
         toolbar = createSortToolbar(table, columns, applySort);
+        pagination = createTablePagination(table);
     }
 
     function enhanceSortableGrid(grid) {

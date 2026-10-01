@@ -15,6 +15,9 @@ public sealed class ProfileViewModel : IValidatableObject
     [StringLength(100)]
     public string? City { get; set; }
 
+    [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
+    public NotificationPreferencesViewModel Notifications { get; set; } = new();
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         var names = (FullName ?? "").Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
@@ -27,6 +30,7 @@ public sealed class ProfileViewModel : IValidatableObject
     public static ProfileViewModel FromUser(ApplicationUser user) => new()
     {
         FullName = user.FullName, Email = user.Email ?? "", Mobile = user.PhoneNumber,
-        Address = user.StreetAddress, City = user.BarangayCity
+        Address = user.StreetAddress, City = user.BarangayCity,
+        Notifications = NotificationPreferencesViewModel.FromUser(user)
     };
 }

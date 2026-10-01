@@ -30,23 +30,52 @@ namespace HomeServeIT.Web.Areas.Admin.Controllers
             return View(users);
         }
 
-        public async Task<IActionResult> ArchivedUsers()
+        public async Task<IActionResult> ArchivedUsers(int servicePage = 1, int userPage = 1, string? section = null)
         {
-            var users = await _userManager.Users.Where(u => u.IsArchived).ToListAsync();
-            var requests = await _context.ServiceRequests
+            const int pageSize = 10;
+            var usersQuery = _userManager.Users
+                .AsNoTracking()
+                .Where(u => u.IsArchived);
+            var userTotal = await usersQuery.CountAsync();
+            var userPageCount = PageCount(userTotal, pageSize);
+            userPage = Math.Clamp(userPage, 1, userPageCount);
+            var users = await usersQuery
+                .OrderBy(u => u.Email)
+                .Skip((userPage - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var requestsQuery = _context.ServiceRequests
                 .Include(r => r.Customer)
                 .Include(r => r.Technician!)
                 .ThenInclude(t => t.User)
                 .Where(r => r.IsArchived)
+                .AsNoTracking();
+            var serviceRequestTotal = await requestsQuery.CountAsync();
+            var serviceRequestPageCount = PageCount(serviceRequestTotal, pageSize);
+            servicePage = Math.Clamp(servicePage, 1, serviceRequestPageCount);
+            var requests = await requestsQuery
                 .OrderByDescending(r => r.ScheduledDate)
+                .Skip((servicePage - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
 
             return View(new AdminArchiveViewModel
             {
                 Users = users,
-                ServiceRequests = requests
+                ServiceRequests = requests,
+                UserTotal = userTotal,
+                UserPage = userPage,
+                UserPageCount = userPageCount,
+                ServiceRequestTotal = serviceRequestTotal,
+                ServiceRequestPage = servicePage,
+                ServiceRequestPageCount = serviceRequestPageCount,
+                Section = section == "users" ? "users" : "services"
             });
         }
+
+        private static int PageCount(int total, int pageSize) =>
+            Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
 
         [HttpPost]
         [ValidateAntiForgeryToken]

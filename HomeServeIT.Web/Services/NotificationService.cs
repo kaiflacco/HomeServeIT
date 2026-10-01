@@ -8,6 +8,8 @@ namespace HomeServeIT.Web.Services;
 
 public class NotificationService
 {
+    public const int NotificationPageSize = 10;
+
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
 
@@ -20,7 +22,8 @@ public class NotificationService
     public async Task<NotificationFeedViewModel> GetFeedAsync(
         ApplicationUser user,
         string? category = null,
-        int? take = null)
+        int? take = null,
+        int page = 1)
     {
         var role = await ResolveRoleAsync(user);
         if (role == null)
@@ -30,36 +33,73 @@ public class NotificationService
             .AsNoTracking()
             .Where(n => n.RecipientUserID == user.Id && n.AudienceRole == role);
 
-        var allNotifications = await baseQuery
-            .OrderByDescending(n => n.CreatedAt)
-            .ThenByDescending(n => n.NotificationID)
-            .Take(150)
-            .ToListAsync();
+        baseQuery = ApplyPreferences(baseQuery, user, role);
 
         var categories = CategoriesFor(role);
         var activeCategory = categories.Contains(category ?? string.Empty, StringComparer.OrdinalIgnoreCase)
             ? categories.First(c => c.Equals(category, StringComparison.OrdinalIgnoreCase))
             : "All";
 
-        IEnumerable<UserNotification> visible = allNotifications;
+        var totalCount = await baseQuery.CountAsync();
+        var unreadCount = await baseQuery.CountAsync(n => !n.IsRead);
+        var categoryCounts = await baseQuery
+            .GroupBy(n => n.Category)
+            .Select(group => new { Category = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(item => item.Category, item => item.Count);
+
+        var visibleQuery = baseQuery;
         if (activeCategory != "All")
-            visible = visible.Where(n => n.Category.Equals(activeCategory, StringComparison.OrdinalIgnoreCase));
+            visibleQuery = visibleQuery.Where(n => n.Category == activeCategory);
+
+        var filteredCount = activeCategory == "All"
+            ? totalCount
+            : categoryCounts.GetValueOrDefault(activeCategory);
+        var requestedPage = Math.Max(1, page);
+        var pageSize = take.HasValue ? Math.Max(0, take.Value) : NotificationPageSize;
+        var totalPages = take.HasValue
+            ? 1
+            : Math.Max(1, (int)Math.Ceiling(filteredCount / (double)pageSize));
+        var currentPage = take.HasValue ? 1 : Math.Min(requestedPage, totalPages);
+
+        List<UserNotification> notifications;
         if (take.HasValue)
-            visible = visible.Where(n => !n.IsRead).Take(take.Value);
+        {
+            notifications = take.Value == 0
+                ? []
+                : await visibleQuery
+                    .Where(n => !n.IsRead)
+                    .OrderByDescending(n => n.CreatedAt)
+                    .ThenByDescending(n => n.NotificationID)
+                    .Take(pageSize)
+                    .ToListAsync();
+        }
+        else
+        {
+            notifications = await visibleQuery
+                .OrderByDescending(n => n.CreatedAt)
+                .ThenByDescending(n => n.NotificationID)
+                .Skip((currentPage - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+        }
 
         var counts = categories.ToDictionary(
             c => c,
-            c => c == "All" ? allNotifications.Count : allNotifications.Count(n => n.Category == c));
+            c => c == "All" ? totalCount : categoryCounts.GetValueOrDefault(c));
 
         return new NotificationFeedViewModel
         {
-            Notifications = visible.ToList(),
+            Notifications = notifications,
             Categories = categories,
             CategoryCounts = counts,
             ActiveCategory = activeCategory,
             Area = AreaFor(role),
-            UnreadCount = allNotifications.Count(n => !n.IsRead),
-            TotalCount = allNotifications.Count
+            UnreadCount = unreadCount,
+            TotalCount = totalCount,
+            FilteredCount = filteredCount,
+            CurrentPage = currentPage,
+            PageSize = pageSize,
+            TotalPages = totalPages
         };
     }
 
@@ -81,13 +121,14 @@ public class NotificationService
         return true;
     }
 
-    public async Task MarkAllReadAsync(ApplicationUser user)
+    public async Task MarkAllReadAsync(ApplicationUser user, DateTime? through = null)
     {
         var role = await ResolveRoleAsync(user);
         if (role == null) return;
 
-        var unread = await _context.UserNotifications
-            .Where(n => n.RecipientUserID == user.Id && n.AudienceRole == role && !n.IsRead)
+        var unread = await ApplyPreferences(_context.UserNotifications, user, role)
+            .Where(n => n.RecipientUserID == user.Id && n.AudienceRole == role && !n.IsRead
+                && (!through.HasValue || n.CreatedAt <= through.Value))
             .ToListAsync();
 
         var now = DateTime.UtcNow;
@@ -122,6 +163,15 @@ public class NotificationService
 
         return IsSafeLocalPath(notification.ActionUrl) ? notification.ActionUrl : null;
     }
+
+    // Keep underlying notifications and read state intact while hiding muted categories
+    // consistently from the page, tray, and counts. Administrator alerts are unaffected.
+    private static IQueryable<UserNotification> ApplyPreferences(
+        IQueryable<UserNotification> query, ApplicationUser user, string role) =>
+        role == Roles.Administrator ? query : query.Where(n =>
+            (n.Category != "Jobs" || user.PrefApptReminders)
+            && (n.Category != "Quotations" || user.PrefQuotations)
+            && (n.Category != "Billing" || user.PrefInvoices));
 
     private async Task<string?> ResolveRoleAsync(ApplicationUser user)
     {
@@ -303,49 +353,46 @@ public class NotificationService
         if (customer == null) return [];
 
         var notifications = new List<UserNotification>();
-        if (user.PrefApptReminders)
-        {
-            var requests = await _context.ServiceRequests
-                .AsNoTracking()
-                .Include(r => r.Technician)
-                .Where(r => r.CustomerID == customer.CustomerID
-                    && (!r.IsArchived || r.Status == "Cancelled"))
-                .OrderByDescending(r => r.RequestID)
-                .ToListAsync();
+        var requests = await _context.ServiceRequests
+            .AsNoTracking()
+            .Include(r => r.Technician)
+            .Where(r => r.CustomerID == customer.CustomerID
+                && (!r.IsArchived || r.Status == "Cancelled"))
+            .OrderByDescending(r => r.RequestID)
+            .ToListAsync();
 
-            foreach (var request in requests)
+        foreach (var request in requests)
+        {
+            var cancellationState = request.CancellationStatus?.ToLowerInvariant() ?? "none";
+            var title = request.CancellationStatus switch
             {
-                var cancellationState = request.CancellationStatus?.ToLowerInvariant() ?? "none";
-                var title = request.CancellationStatus switch
+                "Pending" => "Cancellation request is being reviewed",
+                "Approved" => "Cancellation request approved",
+                "Rejected" => "Cancellation request declined",
+                _ => request.Status switch
                 {
-                    "Pending" => "Cancellation request is being reviewed",
-                    "Approved" => "Cancellation request approved",
-                    "Rejected" => "Cancellation request declined",
-                    _ => request.Status switch
-                    {
-                        "Pending" => "Service request received",
-                        "Scheduled" => "Service appointment confirmed",
-                        "In Progress" => "Your service is in progress",
-                        "Diagnosing" => "Your device is being diagnosed",
-                        "PendingCustomerReview" => "Service work is ready for your approval",
-                        "Completed" => "Service request completed",
-                        "Cancelled" => "Service request cancelled",
-                        _ => $"Service request updated to {request.Status}"
-                    }
-                };
-                var technician = request.Technician == null
-                    ? "A technician will be assigned soon."
-                    : $"Assigned technician: {request.Technician.FirstName} {request.Technician.LastName}.";
-                notifications.Add(New(
-                    $"customer:request:{request.RequestID}:{request.Status.ToLowerInvariant()}:{cancellationState}",
-                    "Jobs",
-                    request.Status == "Completed" ? "check-circle" : "wrench",
-                    title,
-                    $"JOB-{request.RequestID:D4} is scheduled for {request.ScheduledDate:MMM d, yyyy 'at' h:mm tt}. {technician}",
-                    request.Status == "Cancelled"
-                        ? $"/Customer/ServiceRequests?jobId={request.RequestID}&filter=Cancelled"
-                        : $"/Customer/ServiceRequests?jobId={request.RequestID}"));
-            }
+                    "Pending" => "Service request received",
+                    "Scheduled" => "Service appointment confirmed",
+                    "In Progress" => "Your service is in progress",
+                    "Diagnosing" => "Your device is being diagnosed",
+                    "PendingCustomerReview" => "Service work is ready for your approval",
+                    "Completed" => "Service request completed",
+                    "Cancelled" => "Service request cancelled",
+                    _ => $"Service request updated to {request.Status}"
+                }
+            };
+            var technician = request.Technician == null
+                ? "A technician will be assigned soon."
+                : $"Assigned technician: {request.Technician.FirstName} {request.Technician.LastName}.";
+            notifications.Add(New(
+                $"customer:request:{request.RequestID}:{request.Status.ToLowerInvariant()}:{cancellationState}",
+                "Jobs",
+                request.Status == "Completed" ? "check-circle" : "wrench",
+                title,
+                $"JOB-{request.RequestID:D4} is scheduled for {request.ScheduledDate:MMM d, yyyy 'at' h:mm tt}. {technician}",
+                request.Status == "Cancelled"
+                    ? $"/Customer/ServiceRequests?jobId={request.RequestID}&filter=Cancelled"
+                    : $"/Customer/ServiceRequests?jobId={request.RequestID}"));
         }
 
         var invoices = await _context.Invoices
@@ -358,7 +405,7 @@ public class NotificationService
 
         foreach (var invoice in invoices)
         {
-            if (invoice.IsQuotation && user.PrefQuotations)
+            if (invoice.IsQuotation)
             {
                 var title = invoice.QuotationStatus switch
                 {
@@ -375,7 +422,7 @@ public class NotificationService
                     $"QT-{invoice.InvoiceID:D4} for JOB-{invoice.RequestID:D4} totals ₱{invoice.TotalAmount:N2}.",
                     "/Customer/Quotations"));
             }
-            else if (!invoice.IsQuotation && user.PrefInvoices)
+            else if (!invoice.IsQuotation)
             {
                 notifications.Add(New(
                     $"customer:invoice:{invoice.InvoiceID}:{invoice.PaymentStatus.ToLowerInvariant()}",
@@ -464,6 +511,25 @@ public class NotificationService
             $"QT-{quote.InvoiceID:D4} for JOB-{quote.RequestID:D4} totals ₱{quote.TotalAmount:N2}.",
             $"/Technician/AssignedJobs?jobId={quote.RequestID}")));
 
+        // Customer acceptance is recorded by the Approve & Pay flow as Paid,
+        // including quotations that remain IsQuotation after checkout.
+        var paidInvoices = await _context.Invoices
+            .AsNoTracking()
+            .Where(i => i.PaymentStatus == "Paid"
+                && i.ServiceRequest.TechID == technician.TechID
+                && !i.ServiceRequest.IsArchived
+                && !i.ServiceRequest.Customer.User.IsArchived
+                && i.ServiceRequest.Status != "Cancelled")
+            .OrderByDescending(i => i.DateIssued)
+            .ToListAsync();
+        notifications.AddRange(paidInvoices.Select(invoice => New(
+            $"technician:invoice:{invoice.InvoiceID}:paid",
+            "Billing",
+            "check-circle",
+            "Invoice payment recorded",
+            $"Payment of ₱{invoice.TotalAmount:N2} has been recorded for {(invoice.IsQuotation ? "QT" : "INV")}-{invoice.InvoiceID:D4} on JOB-{invoice.RequestID:D4}. Open the assigned job to review the next step.",
+            $"/Technician/AssignedJobs?jobId={invoice.RequestID}")));
+
         return notifications;
     }
 
@@ -506,7 +572,7 @@ public class NotificationService
     private static IReadOnlyList<string> CategoriesFor(string role) => role switch
     {
         Roles.Administrator => ["All", "Jobs", "Quotations", "Inventory", "Support"],
-        Roles.Technician => ["All", "Jobs", "Quotations"],
+        Roles.Technician => ["All", "Jobs", "Quotations", "Billing"],
         _ => ["All", "Jobs", "Quotations", "Billing", "Support"]
     };
 

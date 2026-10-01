@@ -11,15 +11,45 @@
         return utc.ToLocalTime().ToString("MMM d, yyyy");
     }
 }
-<div class="relative" x-data="{ open: false }" @@click.outside="open = false">
-    <button type="button" @@click="open = !open" :aria-expanded="open" aria-haspopup="true" aria-label="Open notifications" class="ui-icon-button relative">
+<div class="relative" x-data="{
+    open: false, unreadCount: @Model.UnreadCount, acknowledged: false, busy: false, timer: null, revision: 0,
+    init() { this.timer = setInterval(() => this.refreshCount(), 30000); },
+    destroy() { clearInterval(this.timer); },
+    async refreshCount() {
+        if (this.busy) return;
+        this.busy = true;
+        const revision = this.revision;
+        try {
+            const response = await fetch('/notifications/unread-count', { cache: 'no-store' });
+            if (response.ok) {
+                const result = await response.json();
+                if (revision === this.revision) this.unreadCount = result.unreadCount;
+            }
+        } catch { /* Retry on the next refresh. */ }
+        finally { this.busy = false; }
+    },
+    async toggle() {
+        this.open = !this.open;
+        if (!this.open) return;
+        const revision = ++this.revision;
+        try {
+            const body = new FormData(this.$refs.acknowledge);
+            const response = await fetch('/notifications/tray-open', { method: 'POST', body });
+            if (!response.ok) return;
+            const result = await response.json();
+            if (revision !== this.revision) return;
+            ++this.revision;
+            this.unreadCount = result.unreadCount;
+            this.acknowledged = true;
+        } catch { /* Preserve the badge if the acknowledgement did not save. */ }
+    }
+}" @@click.outside="open = false" @@keydown.escape.window="open = false">
+    <form x-ref="acknowledge" hidden>@Html.AntiForgeryToken()</form>
+    <button type="button" @@click="toggle()" :aria-expanded="open" aria-haspopup="true" aria-label="Open notifications" class="ui-icon-button relative">
         <partial name="_AppIcon" model='"bell"' />
-        @if (Model.UnreadCount > 0)
-        {
-            <span class="absolute -right-0.5 -top-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#0878f9] ring-2 ring-white flex items-center justify-center text-[9px] leading-none font-bold text-white">
-                @(Model.UnreadCount > 99 ? "99+" : Model.UnreadCount)
+            <span x-show="unreadCount > 0" x-text="unreadCount > 99 ? '99+' : unreadCount" style="@(Model.UnreadCount == 0 ? "display:none" : "")" class="absolute -right-0.5 -top-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#0878f9] ring-2 ring-white flex items-center justify-center text-[9px] leading-none font-bold text-white">
+                @Model.UnreadCount
             </span>
-        }
     </button>
 
     <div x-show="open"
@@ -34,11 +64,11 @@
         <div class="flex items-center justify-between gap-4 border-b border-[#e7eaf0] px-4 py-3.5">
             <div>
                 <h2 class="text-sm font-semibold text-[#17191c]">Notifications</h2>
-                <p class="mt-0.5 text-[11px] text-[#8a929e]">@Model.UnreadCount unread</p>
+                <p class="mt-0.5 text-[11px] text-[#8a929e]" x-text="unreadCount + ' unread'">@Model.UnreadCount unread</p>
             </div>
             @if (Model.UnreadCount > 0)
             {
-                <form method="post" action="/notifications/read-all">
+                <form method="post" action="/notifications/read-all" x-show="unreadCount > 0">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="returnUrl" value="@returnUrl" />
                     <button type="submit" class="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-[#0878f9] transition-colors hover:bg-blue-50">Mark all read</button>
@@ -76,7 +106,7 @@
                                 <p class="flex-1 text-[13px] leading-[18px] text-[#17191c] @(notification.IsRead ? "font-medium" : "font-semibold")">@notification.Title</p>
                                 @if (!notification.IsRead)
                                 {
-                                    <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#0878f9]" aria-label="Unread"></span>
+                                    <span x-show="!acknowledged" class="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#0878f9]" aria-label="Unread"></span>
                                 }
                             </div>
                             <p class="mt-1 line-clamp-2 text-xs leading-[18px] text-[#5d6470]">@notification.Message</p>

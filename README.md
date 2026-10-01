@@ -29,7 +29,7 @@
 - [Workflow: Service Request Lifecycle](#-workflow-service-request-lifecycle)
 - [Getting Started](#-getting-started)
 - [Project Structure](#-project-structure)
-- [Default Credentials (Dev Seed)](#-default-credentials-dev-seed)
+- [Local Company Accounts](#-local-company-accounts)
 
 ---
 
@@ -38,6 +38,17 @@
 **HomeServe IT** is a comprehensive IT service management web application. It replaces manual, paper-based or phone-based service coordination with a fully digital, multi-role platform. Customers can book and track IT service requests online. Technicians receive job assignments, manage checklists, and communicate with clients in real time. Administrators oversee operations, manage inventory, approve quotations, and handle billing — all from a unified, modern dashboard.
 
 > Built as the final capstone project for **IT 15 (Information Technology 15 – Systems Development)**
+
+### IT 15 final project
+
+This repository is the **HomeServe IT final project for IT 15**. It contains the complete full-stack implementation, automated regression tests, database migrations, UI assets, and supporting project documentation for evaluation and demonstration.
+
+| Project detail | Value |
+|---|---|
+| Course | IT 15 |
+| Submission | Final project |
+| System | HomeServe IT Service Management System |
+| Application type | Role-based ASP.NET Core MVC web application |
 
 <p align="center">
   <img src="docs/images/1_HomePage.png" width="48%" />
@@ -269,8 +280,8 @@ Customer Submits Request
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/<your-username>/HomeServe-IT.git
-cd "HomeServe-IT"
+git clone https://github.com/kaiflacco/HomeServeIT.git
+cd "HomeServeIT"
 ```
 
 ### 2. Configure the Database Connection
@@ -285,32 +296,71 @@ Edit `HomeServeIT.Web/appsettings.json`:
 }
 ```
 
-### 3. Install Frontend Dependencies
+### 3. Configure Live Weather
+
+The technician dashboard uses WeatherAPI.com for current conditions and a short appointment forecast. Create a free WeatherAPI.com account, then store the key in user secrets or an environment variable; do not commit it to `appsettings.json`:
+
+```bash
+dotnet user-secrets set "WeatherApi:ApiKey" "YOUR_WEATHERAPI_KEY" --project HomeServeIT.Web
+# Or:
+export WeatherApi__ApiKey='YOUR_WEATHERAPI_KEY'
+```
+
+For guided setup and a live connection check, run `bash scripts/setup-weather-api.sh` from the repository root.
+
+The free plan provides real-time weather data with a monthly request limit. The dashboard displays the provider attribution and an informational-use disclaimer.
+
+### 4. Install Frontend Dependencies
 
 ```bash
 cd HomeServeIT.Web
 npm install
+cd ..
 ```
 
-### 4. Apply Migrations & Seed the Database
+### 5. Apply Migrations
 
 ```bash
 dotnet ef database update --project HomeServeIT.Web
 ```
 
-The database seeder (`DbInitializer.cs`) automatically runs on startup in the **Development** environment and creates:
-- Default roles (Admin, Technician, Customer)
-- Seed users (see credentials below)
-- Sample inventory items
-- Stock movement history
+Development startup applies migrations and creates the Administrator, Technician, and Customer roles. It does not create company accounts or overwrite application data.
 
-### 5. Run the Application
+To create a local company data pack with accounts, jobs, billing, inventory, support activity, and notifications, use an explicitly named `homeserve_demo_*` database and provide the account password through the environment:
+
+```bash
+export ASPNETCORE_ENVIRONMENT=Development
+export ConnectionStrings__DefaultConnection='Server=127.0.0.1;Database=homeserve_demo_local;User=root;Password=YOUR_PASSWORD;'
+export BusinessData__UseCurrentModel=true
+export BusinessData__Password='YOUR_DEMO_PASSWORD'
+dotnet run --project HomeServeIT.Web -- --seed-business-data
+dotnet run --project HomeServeIT.Web -- --urls http://localhost:5160
+```
+
+`BusinessData__UseCurrentModel=true` is a local shortcut for the current EF model; it is not migration-replay verification. Keep it set when launching the app against this current-model database. Omit it only when the database has been created through reviewed migrations. The command refuses non-Development, non-local, or incorrectly named databases and is safe to rerun without duplicating company activity. The generated records are for local presentation and testing, not production customer records.
+
+### 6. Run the Application
 
 ```bash
 dotnet watch --project HomeServeIT.Web
 ```
 
 The application will be available at `https://localhost:7XXX` (port shown in terminal).
+
+### 7. Deploy to MonsterASP
+
+The repository includes a GitHub Actions workflow at `.github/workflows/deploy-monsterasp.yml`. It runs on pushes to `main` and can also be started manually from GitHub Actions. Before the first run, configure the production database and environment variables in MonsterASP:
+
+- `ConnectionStrings__DefaultConnection`
+- `WeatherApi__ApiKey` (if live technician weather is enabled)
+
+The workflow removes local `appsettings*.json` files from the publish output, so production configuration must come from MonsterASP environment variables. After the workflow is pushed to GitHub, run the guided account setup:
+
+```bash
+bash scripts/setup-monsterasp-deploy.sh
+```
+
+The wizard guides database/domain/WebDeploy setup and stores `WEBSITE_NAME`, `SERVER_COMPUTER_NAME`, `SERVER_USERNAME`, and `SERVER_PASSWORD` as GitHub Actions secrets. It never writes the WebDeploy password to a file or prints it. Manual workflow runs keep remote-file deletion disabled by default; enable that option only for a dedicated HomeServe IT site.
 
 ---
 
@@ -364,7 +414,7 @@ HomeServeIT.Web/
 │   └── UserNotification.cs
 ├── Data/
 │   ├── ApplicationDbContext.cs               # EF Core DbContext
-│   └── DbInitializer.cs                      # Dev seed data
+│   └── DbInitializer.cs                      # Database initialization
 ├── Services/
 │   ├── JobInventoryService.cs                # Inventory deduction + movement logging
 │   ├── NotificationService.cs                # In-app notification delivery
@@ -380,17 +430,23 @@ HomeServeIT.Web/
 
 ---
 
-## 🔑 Default Credentials (Dev Seed)
+## 🔑 Local Company Accounts
 
-> These accounts are created automatically when running in **Development** mode via `DbInitializer.cs`.
+These accounts are created by the explicit `--seed-business-data` command. They all use the password supplied through `BusinessData__Password`.
 
 | Role | Email | Password |
 |------|-------|----------|
-| **Administrator** | `admin@homeserveit.local` | `Admin@123` |
-| **Technician** | `marco@homeserveit.local` | `Tech@123` |
-| **Customer** | `kyle@homeserveit.local` | `Cust@123` |
+| **Administrator** | `admin@homeserveit.local` | Your `BusinessData__Password` |
+| **Administrator** | `sofia@homeserveit.local` | Your `BusinessData__Password` |
+| **Technician** | `marco@homeserveit.local` | Your `BusinessData__Password` |
+| **Technician** | `aisha@homeserveit.local` | Your `BusinessData__Password` |
+| **Technician** | `jordan@homeserveit.local` | Your `BusinessData__Password` |
+| **Customer** | `kyle@homeserveit.local` | Your `BusinessData__Password` |
+| **Customer** | `maria@homeserveit.local` | Your `BusinessData__Password` |
+| **Customer** | `ruben@homeserveit.local` | Your `BusinessData__Password` |
+| **Customer** | `liza@homeserveit.local` | Your `BusinessData__Password` |
 
-> ⚠️ **Do not use these credentials in production.** Change all passwords before deploying to any public environment.
+> ⚠️ These are generated local accounts. Do not use them, or real customer data, in production.
 
 ---
 

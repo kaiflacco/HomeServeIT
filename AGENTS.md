@@ -1,5 +1,19 @@
 # HomeServe IT Agent Guide
 
+## Agent skills
+
+### Issue tracker
+
+Issues and specifications are tracked in GitHub Issues for `kaiflacco/HomeServeIT`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+This repository uses the default triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository using root `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Scope and source of truth
 
 This file applies to the entire repository. Base every change on the current workspace, not on assumptions from older documentation or from another framework. Inspect the relevant `.csproj`, `Program.cs`, configuration keys, models, migrations, controllers, views, services, JavaScript, and neighboring code before editing. When prose documentation conflicts with executable code, the executable code is authoritative; update stale documentation when the task includes it.

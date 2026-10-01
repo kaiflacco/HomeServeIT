@@ -10,12 +10,18 @@
     startDate: '',
     endDate: '',
     reportTypes: [
-        { value: 'Full Summary',    label: 'Full Summary',    icon: 'chart', desc: 'Complete overview of all metrics' },
-        { value: 'Financial',       label: 'Financial',       icon: 'coins', desc: 'Revenue, invoices and payments' },
-        { value: 'Performance',     label: 'Performance',     icon: 'zap', desc: 'Technician and job performance' },
-        { value: 'Service Summary', label: 'Service Summary', icon: 'wrench', desc: 'Service requests breakdown' }
+        { value: 'Full Summary',    label: 'Full Summary',    icon: 'chart', desc: 'Revenue, jobs, service mix and technicians' },
+        { value: 'Financial',       label: 'Financial',       icon: 'coins', desc: 'Collections, balances and invoice register' },
+        { value: 'Performance',     label: 'Performance',     icon: 'zap', desc: 'Completions, turnaround and technician results' },
+        { value: 'Service Summary', label: 'Service Summary', icon: 'wrench', desc: 'Request statuses, categories and schedule' }
     ],
     get isCustom() { return this.datePreset === 'custom'; },
+    get customRangeValid() {
+        return !this.isCustom || (this.startDate && this.endDate && this.startDate <= this.endDate);
+    },
+    get selectedReportDescription() {
+        return this.reportTypes.find(item => item.value === this.reportType)?.desc || '';
+    },
     setPreset(val) {
         this.datePreset = val;
         if (val !== 'custom') { this.startDate = ''; this.endDate = ''; }
@@ -43,7 +49,7 @@
         <div class="bg-white border border-[#e7eaf0] rounded-[16px] p-[24px] shadow-sm hover:-translate-y-1 hover:shadow-md transition-all duration-300">
             <div class="flex items-center gap-3">
                 <div class="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0878f9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    <span class="font-['Inter'] text-[22px] font-bold leading-none text-[#0878f9]" aria-hidden="true">₱</span>
                 </div>
                 <p class="font-['Inter'] font-[550] text-[#5d6470] text-[14px]">Revenue (Last 30 days)</p>
             </div>
@@ -116,15 +122,24 @@
 
     <!-- Table: Recent Reports -->
     <div class="w-full mt-6 bg-white border border-[#e7eaf0] rounded-[16px] overflow-hidden shadow-sm">
-        <div class="p-6 border-b border-[#e7eaf0] flex items-center justify-between">
-            <p class="font-['Inter'] font-semibold text-[#17191c] text-[16px]">Recent reports</p>
+        <div class="p-6 border-b border-[#e7eaf0] flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <p class="font-['Inter'] font-semibold text-[#17191c] text-[16px]">Recent reports</p>
+                <p class="mt-1 font-['Inter'] text-[12px] leading-5 text-[#5d6470]">Re-download the exact PDFs you generated, with their original report type and reporting period.</p>
+            </div>
+            @if (Model.RecentReports.Count > 0)
+            {
+                <span class="mt-2 inline-flex w-fit items-center rounded-full bg-[#edf5ff] px-2.5 py-1 text-[11px] font-semibold text-[#0868d7] sm:mt-0">Latest @Model.RecentReports.Count</span>
+            }
         </div>
-        <table class="w-full text-left border-collapse">
+        <div class="overflow-x-auto">
+        <table class="w-full min-w-[860px] text-left border-collapse">
             <thead>
                 <tr class="border-b border-[#e7eaf0] bg-gray-50/50">
-                    <th class="py-3 px-6 font-['Inter'] font-[650] text-[11px] text-[#8a929e] uppercase tracking-wider">Report Name</th>
-                    <th class="py-3 px-6 font-['Inter'] font-[650] text-[11px] text-[#8a929e] uppercase tracking-wider">Generated On</th>
+                    <th class="py-3 px-6 font-['Inter'] font-[650] text-[11px] text-[#8a929e] uppercase tracking-wider">File</th>
                     <th class="py-3 px-6 font-['Inter'] font-[650] text-[11px] text-[#8a929e] uppercase tracking-wider">Type</th>
+                    <th class="py-3 px-6 font-['Inter'] font-[650] text-[11px] text-[#8a929e] uppercase tracking-wider">Reporting period</th>
+                    <th class="py-3 px-6 font-['Inter'] font-[650] text-[11px] text-[#8a929e] uppercase tracking-wider">Generated</th>
                     <th class="py-3 px-6 font-['Inter'] font-[650] text-[11px] text-[#8a929e] uppercase tracking-wider text-right">Action</th>
                 </tr>
             </thead>
@@ -133,9 +148,20 @@
                 {
                     @foreach (var report in Model.RecentReports)
                     {
+                        var generatedUtc = DateTime.SpecifyKind(report.GeneratedAtUtc, DateTimeKind.Utc);
+                        var generatedLocal = generatedUtc.ToLocalTime();
                         <tr class="border-b border-[#e7eaf0] last:border-0 hover:bg-gray-50 transition-colors">
-                            <td class="py-4 px-6 font-semibold">@report.ReportName</td>
-                            <td class="py-4 px-6 text-[#5d6470]">@report.GeneratedOn</td>
+                            <td class="max-w-[280px] py-4 px-6">
+                                <div class="flex items-center gap-3">
+                                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-700" aria-hidden="true">
+                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    </span>
+                                    <div class="min-w-0">
+                                        <p class="break-words font-semibold leading-5 text-[#17191c]">@report.FileName</p>
+                                        <p class="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-[#8a929e]">PDF document</p>
+                                    </div>
+                                </div>
+                            </td>
                             <td class="py-4 px-6">
                                 @if (report.ReportType == "Financial")
                                 {
@@ -145,13 +171,27 @@
                                 {
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700">@report.ReportType</span>
                                 }
+                                else if (report.ReportType == "Full Summary")
+                                {
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-green-50 text-green-700">@report.ReportType</span>
+                                }
                                 else
                                 {
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-orange-700">@report.ReportType</span>
                                 }
                             </td>
+                            <td class="whitespace-nowrap py-4 px-6 text-[#5d6470]">
+                                @report.PeriodStartUtc.ToString("MMM d, yyyy") – @report.PeriodEndUtc.ToString("MMM d, yyyy")
+                            </td>
+                            <td class="whitespace-nowrap py-4 px-6 text-[#5d6470]">
+                                <time datetime="@generatedUtc.ToString("O")">@generatedLocal.ToString("MMM d, yyyy · h:mm tt")</time>
+                            </td>
                             <td class="py-4 px-6 text-right">
-                                <a href="@Url.Action("DownloadReport", "Crm", new { area = "Admin", type = report.ReportType })" class="text-[#0878f9] hover:text-blue-700 font-medium transition-colors">Download PDF</a>
+                                <a asp-area="Admin" asp-controller="Crm" asp-action="DownloadRecentReport" asp-route-id="@report.GeneratedReportID"
+                                   class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#cfe2fb] bg-[#f5f9ff] px-3 py-2 font-semibold text-[#0878f9] transition-colors hover:border-[#0878f9] hover:bg-[#edf5ff] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0878f9] focus-visible:ring-offset-2">
+                                    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 21h14"/></svg>
+                                    Download
+                                </a>
                             </td>
                         </tr>
                     }
@@ -159,16 +199,18 @@
                 else
                 {
                     <tr>
-                        <td colspan="4" class="py-12 text-center text-[#8a929e] font-['Inter']">
+                        <td colspan="5" class="py-12 text-center text-[#8a929e] font-['Inter']">
                             <div class="flex flex-col items-center gap-2">
                                 <svg width="36" height="36" fill="none" stroke="#cbd5e0" stroke-width="1.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                                <p>No reports generated yet.</p>
+                                <p class="font-semibold text-[#5d6470]">No saved reports yet</p>
+                                <p class="text-[12px]">Your next generated PDF will appear here for quick re-download.</p>
                             </div>
                         </td>
                     </tr>
                 }
             </tbody>
         </table>
+        </div>
     </div>    <!-- ======== Generate Report Modal ======== -->
     <div x-show="showReportModal" style="display:none;" class="relative z-[100]" role="dialog" aria-modal="true">
         <!-- Backdrop -->
@@ -189,11 +231,12 @@
                             <h3 class="text-[20px] font-bold text-[#17191c]">Generate Report</h3>
                             <p class="text-[13px] text-[#5d6470] mt-0.5">Choose your filters before exporting to PDF.</p>
                         </div>
-                        <button @@click="showReportModal = false" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-[#8a929e] hover:text-[#17191c]">
+                        <button type="button" @@click="showReportModal = false" aria-label="Close report dialog" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-[#8a929e] hover:text-[#17191c]">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
                     </div>
-                    <form method="get" asp-action="DownloadReport" asp-controller="Crm" asp-area="Admin">
+                    <form method="post" asp-action="DownloadReport" asp-controller="Crm" asp-area="Admin"
+                          @@submit="if (!customRangeValid) $event.preventDefault()">
                         <div class="px-6 py-5 space-y-6">
                             <!-- 1. Report Type -->
                             <div>
@@ -208,7 +251,7 @@
                                         <label :for="'rt-' + rt.value"
                                                class="flex items-start gap-3 p-3 rounded-[10px] border cursor-pointer transition-all"
                                                :class="reportType === rt.value ? 'border-[#0878f9] bg-[#edf5ff]' : 'border-[#e7eaf0] hover:border-[#0878f9]/40 hover:bg-gray-50'">
-                                            <input type="radio" name="type" :id="'rt-' + rt.value" :value="rt.value" x-model="reportType" class="mt-0.5 accent-[#0878f9]" />
+                                            <input type="radio" name="type" :id="'rt-' + rt.value" :value="rt.value" x-model="reportType" required class="mt-0.5 accent-[#0878f9]" />
                                             <div>
                                                 <div class="flex items-center gap-1.5">
                                                     <span class="flex h-6 w-6 items-center justify-center rounded-md bg-white text-[#0878f9] shadow-sm ring-1 ring-[#dfe5ec]">
@@ -258,18 +301,21 @@
                                     <div>
                                         <label for="report-start-date" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-[#5d6470]">From</label>
                                         <div class="ui-date-control">
-                                            <input id="report-start-date" type="date" name="startDate" x-model="startDate" class="ui-date-input" data-picker-label="Start date" data-picker-placeholder="Choose start date" />
+                                            <input id="report-start-date" type="date" name="startDate" x-model="startDate" :required="isCustom" :max="endDate || null" class="ui-date-input" data-picker-label="Start date" data-picker-placeholder="Choose start date" />
                                             <span class="ui-date-control__icon" aria-hidden="true"><partial name="~/Views/Shared/_AppIcon.cshtml" model='"calendar"' /></span>
                                         </div>
                                     </div>
                                     <div>
                                         <label for="report-end-date" class="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-[#5d6470]">To</label>
                                         <div class="ui-date-control">
-                                            <input id="report-end-date" type="date" name="endDate" x-model="endDate" class="ui-date-input" data-picker-label="End date" data-picker-placeholder="Choose end date" />
+                                            <input id="report-end-date" type="date" name="endDate" x-model="endDate" :required="isCustom" :min="startDate || null" class="ui-date-input" data-picker-label="End date" data-picker-placeholder="Choose end date" />
                                             <span class="ui-date-control__icon" aria-hidden="true"><partial name="~/Views/Shared/_AppIcon.cshtml" model='"calendar"' /></span>
                                         </div>
                                     </div>
                                 </div>
+                                <p x-show="isCustom && !customRangeValid" x-cloak class="mt-2 text-[12px] font-medium text-red-700">
+                                    Select both dates. The end date must be on or after the start date.
+                                </p>
                             </div>
                             <!-- 3. Live Preview -->
                             <div class="bg-[#f8fafc] rounded-[12px] p-4 border border-[#e7eaf0]">
@@ -289,6 +335,9 @@
                                         'Select a date range'
                                     "></span>
                                 </p>
+                                <p class="mt-1.5 text-[12px] leading-5 text-[#5d6470]">
+                                    Includes: <span class="font-medium text-[#17191c]" x-text="selectedReportDescription"></span>
+                                </p>
                             </div>
                         </div>
                         <!-- Modal Footer -->
@@ -297,8 +346,8 @@
                                     class="px-4 py-2 text-[14px] font-semibold text-[#17191c] bg-white border border-[#e7eaf0] rounded-lg shadow-sm hover:bg-gray-50 transition-colors">
                                 Cancel
                             </button>
-                            <button type="submit"
-                                    class="px-5 py-2 text-[14px] font-semibold text-white bg-[#0878f9] rounded-lg shadow-sm hover:bg-blue-600 transition-colors flex items-center gap-2">
+                            <button type="submit" :disabled="!customRangeValid"
+                                    class="px-5 py-2 text-[14px] font-semibold text-white bg-[#0878f9] rounded-lg shadow-sm hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:bg-[#a8c9ef] disabled:shadow-none">
                                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="18"/><line x1="15" y1="15" x2="12" y2="18"/></svg>
                                 Export PDF
                             </button>

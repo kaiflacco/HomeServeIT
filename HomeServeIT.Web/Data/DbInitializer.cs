@@ -9,12 +9,16 @@ namespace HomeServeIT.Web.Data;
 
 public static class DbInitializer
 {
-    public static async Task InitializeAsync(IServiceProvider services, IHostEnvironment environment)
+    public static async Task InitializeAsync(IServiceProvider services, IHostEnvironment environment,
+        bool? useCurrentModel = null, string? currentModelDatabasePrefix = null)
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        if (services.GetRequiredService<IConfiguration>().GetValue<bool>("TestData:UseCurrentModel"))
+        var currentModel = useCurrentModel
+            ?? services.GetRequiredService<IConfiguration>().GetValue<bool>("TestData:UseCurrentModel");
+        if (currentModel)
         {
-            RequireDisposableDatabase(context, environment);
+            RequireDisposableDatabase(context, environment, currentModelDatabasePrefix ?? "homeserve_test_",
+                "Current-model initialization");
             await context.Database.EnsureCreatedAsync();
         }
         else await context.Database.MigrateAsync();
@@ -33,7 +37,7 @@ public static class DbInitializer
     public static async Task ResetTestDataAsync(IServiceProvider services, IHostEnvironment environment, bool deleteOnly = false)
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        RequireDisposableDatabase(context, environment);
+        RequireDisposableDatabase(context, environment, "homeserve_test_", "Test setup");
         var password = services.GetRequiredService<IConfiguration>()["TestData:Password"];
         if (string.IsNullOrWhiteSpace(password))
             throw new InvalidOperationException("Set TestData__Password before resetting test data.");
@@ -69,12 +73,15 @@ public static class DbInitializer
         await context.SaveChangesAsync();
     }
 
-    private static void RequireDisposableDatabase(ApplicationDbContext context, IHostEnvironment environment)
+    internal static void RequireDisposableDatabase(ApplicationDbContext context, IHostEnvironment environment,
+        string databasePrefix, string operation)
     {
         var connection = new MySqlConnectionStringBuilder(context.Database.GetConnectionString()!);
         if (!environment.IsDevelopment()
             || connection.Server is not ("localhost" or "127.0.0.1" or "::1")
-            || !System.Text.RegularExpressions.Regex.IsMatch(connection.Database, @"^homeserve_test_[a-zA-Z0-9_]+$"))
-            throw new InvalidOperationException("Test setup requires Development and a local database named homeserve_test_<name>.");
+            || !System.Text.RegularExpressions.Regex.IsMatch(connection.Database,
+                $"^{System.Text.RegularExpressions.Regex.Escape(databasePrefix)}[a-zA-Z0-9_]+$"))
+            throw new InvalidOperationException(
+                $"{operation} requires Development and a local database named {databasePrefix}<name>.");
     }
 }

@@ -14,13 +14,15 @@ public class ReportsViewModel
     public List<string> RevenueLabels { get; set; } = new();
     public Dictionary<string, int> JobsByCategory { get; set; } = new();
 
-    // Mock fields for charts / recent reports
     public List<RecentReportItem> RecentReports { get; set; } = new();
 }
 
 public class RecentReportItem
 {
-    public string ReportName { get; set; } = string.Empty;
-    public string GeneratedOn { get; set; } = string.Empty;
+    public int GeneratedReportID { get; set; }
+    public string FileName { get; set; } = string.Empty;
     public string ReportType { get; set; } = string.Empty;
+    public DateTime PeriodStartUtc { get; set; }
+    public DateTime PeriodEndUtc { get; set; }
+    public DateTime GeneratedAtUtc { get; set; }
 }

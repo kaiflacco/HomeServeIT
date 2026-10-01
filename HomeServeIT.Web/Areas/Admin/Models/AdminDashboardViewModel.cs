@@ -4,6 +4,12 @@ namespace HomeServeIT.Web.Areas.Admin.Models
 {
     public class AdminDashboardViewModel
     {
+        public string Period { get; set; } = "month";
+        public string PeriodLabel { get; set; } = "This month";
+        public string PeriodDescription { get; set; } = "Current month";
+        public string ChartRangeLabel { get; set; } = "Last 6 months";
+        public string RevenueChartTitle { get; set; } = "Monthly revenue";
+
         public int TotalActiveRequests { get; set; }
         public int JobsTodayCount { get; set; }
         public int TotalTechnicians { get; set; }

@@ -294,6 +294,49 @@ namespace HomeServeIT.Web.Migrations
                     b.ToTable("Devices");
                 });
 
+            modelBuilder.Entity("HomeServeIT.Web.Models.GeneratedReport", b =>
+                {
+                    b.Property<int>("GeneratedReportID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("GeneratedReportID"));
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("varchar(180)");
+
+                    b.Property<DateTime>("GeneratedAtUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("GeneratedByUserID")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<byte[]>("PdfContent")
+                        .IsRequired()
+                        .HasColumnType("longblob");
+
+                    b.Property<DateTime>("PeriodEndUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<DateTime>("PeriodStartUtc")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("ReportType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)");
+
+                    b.HasKey("GeneratedReportID");
+
+                    b.HasIndex("GeneratedByUserID", "GeneratedAtUtc");
+
+                    b.ToTable("GeneratedReports");
+                });
+
             modelBuilder.Entity("HomeServeIT.Web.Models.InventoryItem", b =>
                 {
                     b.Property<int>("ItemID")
@@ -945,6 +988,17 @@ namespace HomeServeIT.Web.Migrations
                         .IsRequired();
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("HomeServeIT.Web.Models.GeneratedReport", b =>
+                {
+                    b.HasOne("HomeServeIT.Web.Models.ApplicationUser", "GeneratedByUser")
+                        .WithMany()
+                        .HasForeignKey("GeneratedByUserID")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("GeneratedByUser");
                 });
 
             modelBuilder.Entity("HomeServeIT.Web.Models.Invoice", b =>

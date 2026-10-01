@@ -1,0 +1,31 @@
+@model HomeServeIT.Web.Models.NotificationPreferencesViewModel
+@{
+    var area = ViewContext.RouteData.Values["area"]?.ToString();
+}
+<form method="post" asp-area="@area" asp-controller="ProfileAndSettings" asp-action="UpdateNotifications" class="account-card" aria-labelledby="notification-preferences-heading">
+    <div class="account-card-body">
+        <h2 id="notification-preferences-heading">Notifications</h2>
+        <p>Choose the updates you see in your notification feed and bell menu.</p>
+        <div class="account-preferences">
+            <label class="account-preference" for="JobUpdates">
+                <span><strong>Job updates</strong><small>@(area == "Technician" ? "Assignments, schedules, and job progress" : "Appointments and service progress")</small></span>
+                <input asp-for="JobUpdates" role="switch" />
+            </label>
+            <label class="account-preference" for="Quotations">
+                <span><strong>Quotations</strong><small>Reviews, approvals, and revisions</small></span>
+                <input asp-for="Quotations" role="switch" />
+            </label>
+            <label class="account-preference" for="Billing">
+                <span><strong>Billing and payments</strong><small>Invoice and payment updates</small></span>
+                <input asp-for="Billing" role="switch" />
+            </label>
+        </div>
+        <p class="account-preferences-note">Changes apply after saving. Muted updates won’t count toward your unread badge.</p>
+        @if (area == "Customer")
+        {
+            <p class="account-preferences-note">Support replies always stay on.</p>
+        }
+        <button type="submit" class="account-button account-button-secondary">Save preferences</button>
+        <a asp-area="@area" asp-controller="Notifications" asp-action="Index" class="account-notifications-link">View notifications <span aria-hidden="true">→</span></a>
+    </div>
+</form>

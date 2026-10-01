@@ -16,11 +16,16 @@ namespace HomeServeIT.Web.Areas.Technician.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly WeatherService _weatherService;
 
-        public DashboardController(ApplicationDbContext context, UserManager<ApplicationUser> userManager)
+        public DashboardController(
+            ApplicationDbContext context,
+            UserManager<ApplicationUser> userManager,
+            WeatherService weatherService)
         {
             _context = context;
             _userManager = userManager;
+            _weatherService = weatherService;
         }
 
         public async Task<IActionResult> Index()
@@ -53,6 +58,18 @@ namespace HomeServeIT.Web.Areas.Technician.Controllers
                                     .Take(5)
                                     .ToList()
             };
+
+            var nextJob = vm.TodaysJobs.FirstOrDefault(j => j.Status == "In Progress")
+                          ?? vm.TodaysJobs.FirstOrDefault(j => j.Status == "Pending")
+                          ?? vm.UpcomingJobs.FirstOrDefault();
+            // Use the appointment city when a job exists; otherwise show live weather
+            // for the technician's city so the dashboard remains useful on quiet days.
+            // Only city-level profile data is sent to the provider.
+            var weatherCity = nextJob?.Customer?.User?.BarangayCity ?? user?.BarangayCity;
+            vm.NextJobWeather = await _weatherService.GetWeatherAsync(
+                weatherCity,
+                nextJob?.ScheduledDate ?? DateTime.Today,
+                HttpContext.RequestAborted);
 
             return View(vm);
         }

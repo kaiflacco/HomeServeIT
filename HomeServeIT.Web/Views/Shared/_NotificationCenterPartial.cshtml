@@ -10,6 +10,18 @@
         if (elapsed.TotalDays < 7) return $"{(int)elapsed.TotalDays} days ago";
         return utc.ToLocalTime().ToString("MMM d, yyyy 'at' h:mm tt");
     }
+
+    string CategoryUrl(string category) => category == "All"
+        ? Model.AllNotificationsUrl
+        : $"{Model.AllNotificationsUrl}?category={Uri.EscapeDataString(category)}";
+
+    string PageUrl(int page)
+    {
+        var query = Model.ActiveCategory == "All"
+            ? string.Empty
+            : $"category={Uri.EscapeDataString(Model.ActiveCategory)}&";
+        return $"{Model.AllNotificationsUrl}?{query}page={page}";
+    }
 }
 <div class="mx-auto flex w-full max-w-6xl flex-col gap-6 p-5 sm:p-8">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -39,7 +51,7 @@
         @foreach (var category in Model.Categories)
         {
             var active = Model.ActiveCategory == category;
-            var href = category == "All" ? Model.AllNotificationsUrl : $"{Model.AllNotificationsUrl}?category={Uri.EscapeDataString(category)}";
+            var href = CategoryUrl(category);
             <a href="@href" class="inline-flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition @(active ? "bg-[#edf5ff] text-[#0878f9] shadow-sm ring-1 ring-[#d8e9ff]" : "text-[#5d6470] hover:bg-[#f6f8fb] hover:text-[#17191c]")" aria-current="@(active ? "page" : null)">
                 @category
                 <span class="rounded-full px-1.5 py-0.5 text-[10px] leading-none @(active ? "bg-white text-[#0878f9]" : "bg-[#eef1f5] text-[#7b8490]")">@Model.CategoryCounts[category]</span>
@@ -108,6 +120,22 @@
                     </article>
                 }
             </div>
+        }
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="flex items-center justify-between gap-3 border-t border-[#e9edf2] px-4 py-4 text-xs text-[#69717d] sm:px-6" aria-label="Notification records pagination">
+                <span>Page @Model.CurrentPage of @Model.TotalPages</span>
+                <div class="flex items-center gap-2">
+                    @if (Model.HasPreviousPage)
+                    {
+                        <a href="@PageUrl(Model.CurrentPage - 1)" rel="prev" class="rounded-lg border border-[#dce2ea] bg-white px-3 py-2 font-semibold hover:border-blue-300 hover:text-[#0878f9]">Previous</a>
+                    }
+                    @if (Model.HasNextPage)
+                    {
+                        <a href="@PageUrl(Model.CurrentPage + 1)" rel="next" class="rounded-lg border border-[#dce2ea] bg-white px-3 py-2 font-semibold hover:border-blue-300 hover:text-[#0878f9]">Next</a>
+                    }
+                </div>
+            </nav>
         }
     </section>
 </div>

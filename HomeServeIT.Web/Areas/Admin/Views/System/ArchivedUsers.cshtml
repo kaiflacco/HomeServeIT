@@ -2,7 +2,7 @@
 @inject Microsoft.AspNetCore.Identity.UserManager<HomeServeIT.Web.Models.ApplicationUser> UserManager
 @{ ViewData["Title"] = "Archive"; }
 
-<div x-data="{ section: 'services', query: '', showDeleteModal: false, deleteUserId: '', deleteUserEmail: '' }" class="flex flex-col max-w-7xl p-4 sm:p-6 lg:p-8 w-full mx-auto gap-6">
+<div x-data="{ section: '@Model.Section', query: '', showDeleteModal: false, deleteUserId: '', deleteUserEmail: '' }" class="flex flex-col max-w-7xl p-4 sm:p-6 lg:p-8 w-full mx-auto gap-6">
     <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
             <div class="flex items-center gap-2 mb-2"><span class="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg></span><span class="text-[11px] font-bold uppercase tracking-[0.16em] text-[#8a929e]">Records center</span></div>
@@ -17,11 +17,11 @@
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <button type="button" @@click="section = 'services'; query = ''" class="text-left rounded-2xl border p-5 transition-all" :class="section === 'services' ? 'border-blue-300 bg-blue-50/50 ring-2 ring-blue-100' : 'border-[#e7eaf0] bg-white hover:border-gray-300'">
-            <div class="flex items-center justify-between"><span class="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.1-3.1a6 6 0 0 1-7.9 7.9l-5.7 5.7a2.1 2.1 0 0 1-3-3l5.7-5.7a6 6 0 0 1 7.9-7.9z"/></svg></span><span class="font-['JetBrains_Mono'] text-2xl font-bold">@Model.ServiceRequests.Count</span></div>
+            <div class="flex items-center justify-between"><span class="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.1-3.1a6 6 0 0 1-7.9 7.9l-5.7 5.7a2.1 2.1 0 0 1-3-3l5.7-5.7a6 6 0 0 1 7.9-7.9z"/></svg></span><span class="font-['JetBrains_Mono'] text-2xl font-bold">@Model.ServiceRequestTotal</span></div>
             <h2 class="font-bold text-sm mt-4">Service archives</h2><p class="text-xs text-[#8a929e] mt-1">Completed and cancelled jobs removed from active operations.</p>
         </button>
         <button type="button" @@click="section = 'users'; query = ''" class="text-left rounded-2xl border p-5 transition-all" :class="section === 'users' ? 'border-violet-300 bg-violet-50/50 ring-2 ring-violet-100' : 'border-[#e7eaf0] bg-white hover:border-gray-300'">
-            <div class="flex items-center justify-between"><span class="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></span><span class="font-['JetBrains_Mono'] text-2xl font-bold">@Model.Users.Count</span></div>
+            <div class="flex items-center justify-between"><span class="w-10 h-10 rounded-xl bg-violet-100 text-violet-700 flex items-center justify-center"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></span><span class="font-['JetBrains_Mono'] text-2xl font-bold">@Model.UserTotal</span></div>
             <h2 class="font-bold text-sm mt-4">User archives</h2><p class="text-xs text-[#8a929e] mt-1">Deactivated accounts retained for administration.</p>
         </button>
     </div>
@@ -46,6 +46,22 @@
             @if (!Model.ServiceRequests.Any()) { <tr><td colspan="6" class="py-14 text-center text-sm text-[#8a929e]">No archived service requests.</td></tr> }
             </tbody>
         </table></div>
+        @if (Model.ServiceRequestPageCount > 1)
+        {
+            <nav class="mt-4 flex items-center justify-between gap-3 text-xs text-[#69717d]" aria-label="Archived service records pagination">
+                <span>Page @Model.ServiceRequestPage of @Model.ServiceRequestPageCount</span>
+                <div class="flex items-center gap-2">
+                    @if (Model.ServiceRequestPage > 1)
+                    {
+                        <a asp-action="ArchivedUsers" asp-route-servicePage="@(Model.ServiceRequestPage - 1)" asp-route-userPage="@Model.UserPage" asp-route-section="services" class="rounded-lg border border-[#dce2ea] bg-white px-3 py-2 font-semibold hover:border-blue-300 hover:text-[#0878f9]">Previous</a>
+                    }
+                    @if (Model.ServiceRequestPage < Model.ServiceRequestPageCount)
+                    {
+                        <a asp-action="ArchivedUsers" asp-route-servicePage="@(Model.ServiceRequestPage + 1)" asp-route-userPage="@Model.UserPage" asp-route-section="services" class="rounded-lg border border-[#dce2ea] bg-white px-3 py-2 font-semibold hover:border-blue-300 hover:text-[#0878f9]">Next</a>
+                    }
+                </div>
+            </nav>
+        }
     </section>
 
     <section x-show="section === 'users'" x-transition.opacity style="display:none;">
@@ -72,6 +88,22 @@
             }
             @if (!Model.Users.Any()) { <tr><td colspan="4" class="py-16 text-center"><span class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span><p class="mt-3 text-sm font-bold text-[#30343a]">No archived accounts</p><p class="mt-1 text-xs text-[#8a929e]">All users currently have an active account state.</p></td></tr> }
             </tbody></table></div>
+            @if (Model.UserPageCount > 1)
+            {
+                <nav class="mt-4 flex items-center justify-between gap-3 text-xs text-[#69717d]" aria-label="Archived account records pagination">
+                    <span>Page @Model.UserPage of @Model.UserPageCount</span>
+                    <div class="flex items-center gap-2">
+                        @if (Model.UserPage > 1)
+                        {
+                            <a asp-action="ArchivedUsers" asp-route-servicePage="@Model.ServiceRequestPage" asp-route-userPage="@(Model.UserPage - 1)" asp-route-section="users" class="rounded-lg border border-[#dce2ea] bg-white px-3 py-2 font-semibold hover:border-violet-300 hover:text-violet-700">Previous</a>
+                        }
+                        @if (Model.UserPage < Model.UserPageCount)
+                        {
+                            <a asp-action="ArchivedUsers" asp-route-servicePage="@Model.ServiceRequestPage" asp-route-userPage="@(Model.UserPage + 1)" asp-route-section="users" class="rounded-lg border border-[#dce2ea] bg-white px-3 py-2 font-semibold hover:border-violet-300 hover:text-violet-700">Next</a>
+                        }
+                    </div>
+                </nav>
+            }
         </div>
     </section>
 
