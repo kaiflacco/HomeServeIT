@@ -1,0 +1,82 @@
+@model HomeServeIT.Web.Models.ProfileViewModel
+@{
+    var area = ViewContext.RouteData.Values["area"]?.ToString();
+    var completed = new[] { Model.FullName, Model.Email, Model.Mobile, Model.Address, Model.City }.Count(value => !string.IsNullOrWhiteSpace(value));
+    var percentage = completed * 20;
+}
+<div class="account-page account-profile-page">
+    <header class="account-heading">
+        <p class="account-eyebrow">YOUR ACCOUNT</p>
+        <h1>Profile and settings</h1>
+        <p>Keep your personal details up to date and manage your account security.</p>
+    </header>
+    <div class="account-grid">
+        <form method="post" asp-action="UpdateProfile" asp-controller="ProfileAndSettings" asp-area="@area" class="account-card">
+            <div class="account-card-heading">
+                <h2>Personal information</h2>
+                <p>Your contact details help us keep you informed.</p>
+            </div>
+            <div class="account-card-body">
+                <div asp-validation-summary="All" class="account-validation" role="alert"></div>
+                <div class="account-fields">
+                    <div class="account-field account-field-wide">
+                        <label asp-for="FullName">Full name <span aria-hidden="true">*</span></label>
+                        <input asp-for="FullName" autocomplete="name" />
+                        <span asp-validation-for="FullName"></span>
+                    </div>
+                    <div class="account-field">
+                        <label asp-for="Email">Email address <span aria-hidden="true">*</span></label>
+                        <input asp-for="Email" autocomplete="email" />
+                        <span asp-validation-for="Email"></span>
+                    </div>
+                    <div class="account-field">
+                        <label asp-for="Mobile">Mobile number</label>
+                        <input asp-for="Mobile" type="tel" autocomplete="tel" placeholder="Add a mobile number" />
+                        <span asp-validation-for="Mobile"></span>
+                    </div>
+                </div>
+                <div class="account-section-heading">
+                    <h2>@(area == "Customer" ? "Service address" : "Address")</h2>
+                    <p>@(area == "Customer" ? "Let us know where you need our services." : "Keep your address and city current.")</p>
+                </div>
+                <div class="account-fields">
+                    <div class="account-field account-field-wide">
+                        <label asp-for="Address">Street address</label>
+                        <input asp-for="Address" autocomplete="street-address" placeholder="House number, street, and barangay" />
+                        <span asp-validation-for="Address"></span>
+                    </div>
+                    <div class="account-field account-field-wide">
+                        <label asp-for="City">City</label>
+                        <input asp-for="City" autocomplete="address-level2" placeholder="Enter your city" />
+                        <span asp-validation-for="City"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="account-actions">
+                <p>Fields marked * are required.</p>
+                <button type="submit" class="account-button account-button-primary">Save changes</button>
+            </div>
+        </form>
+        <aside class="account-sidebar" aria-label="Account settings">
+            <section class="account-card account-completeness">
+                <div class="account-card-body">
+                    <div class="account-progress-heading"><h2>Profile completeness</h2><strong>@percentage%</strong></div>
+                    <progress max="100" value="@percentage" aria-label="Profile completeness">@percentage%</progress>
+                    <p>@(completed == 5 ? "All set. Your contact and address details are filled in." : "Add your contact and address details to complete your profile.")</p>
+                </div>
+            </section>
+            <section class="account-card">
+                <div class="account-card-body">
+                    <span class="account-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></svg></span>
+                    <h2>Password and security</h2>
+                    <p>Protect your account with a strong, unique password.</p>
+                    <a asp-area="Identity" asp-page="/Account/Manage/ChangePassword" class="account-button account-button-secondary">Change password <span aria-hidden="true">→</span></a>
+                </div>
+            </section>
+            <partial name="~/Views/Shared/_NotificationPreferences.cshtml" model="Model.Notifications" />
+            <form asp-area="Identity" asp-page="/Account/Logout" asp-route-returnUrl="@Url.Action("Index", "Home", new { area = "" })" method="post" class="account-signout">
+                <button type="submit" class="account-button account-button-secondary">Sign out</button>
+            </form>
+        </aside>
+    </div>
+</div>

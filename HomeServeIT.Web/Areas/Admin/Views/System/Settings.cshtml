@@ -1,0 +1,124 @@
+@model HomeServeIT.Web.Areas.Admin.Models.SystemSettingsViewModel
+@{
+    ViewData["Title"] = "Settings";
+}
+
+<div class="flex w-full max-w-7xl flex-col items-start p-4 sm:p-6 lg:p-8 mx-auto">
+    <header>
+        <h1 class="font-['Inter'] font-[650] leading-[42px] text-[#17191c] text-[28px]">Settings</h1>
+        <p class="mt-1 font-['Inter'] text-[#5d6470] text-[14px]">Configure persisted application behavior and project details.</p>
+    </header>
+
+    <div x-data="{ activeTab: '@Model.ActiveTab' }" class="mt-8 flex w-full flex-col items-start gap-8 md:flex-row">
+        <nav aria-label="Settings sections" role="tablist" class="flex w-full shrink-0 flex-col gap-1 md:w-[240px]">
+            @foreach (var tab in new[] { ("general", "General"), ("company", "Company profile"), ("notifications", "Notifications"), ("security", "Security"), ("integrations", "Integrations") })
+            {
+                <button type="button" x-on:click="activeTab = '@tab.Item1'" :aria-selected="activeTab === '@tab.Item1'" role="tab"
+                        :class="{ 'bg-blue-50 text-[#0878f9]': activeTab === '@tab.Item1', 'text-[#5d6470] hover:bg-gray-50 hover:text-[#17191c]': activeTab !== '@tab.Item1' }"
+                        class="flex min-h-11 items-center justify-between rounded-lg px-4 py-2.5 text-left font-['Inter'] font-[550] text-[14px] transition-colors">
+                    @tab.Item2
+                </button>
+            }
+        </nav>
+
+        <section x-show="activeTab === 'general'" role="tabpanel" class="w-full flex-1 rounded-2xl border border-[#e7eaf0] bg-white shadow-sm">
+            <div class="border-b border-[#e7eaf0] p-6">
+                <h2 class="text-lg font-[650]">General settings</h2>
+                <p class="mt-1 text-[13px] text-[#5d6470]">These values update the shared application branding and support contact.</p>
+            </div>
+            <form asp-action="UpdateGeneral" method="post">
+                <input asp-for="General.ConcurrencyStamp" type="hidden" />
+                <div asp-validation-summary="ModelOnly" class="px-6 pt-4 text-sm text-red-700" role="alert"></div>
+                <div class="flex flex-col gap-6 p-6">
+                    <div class="flex flex-col gap-1.5">
+                        <label asp-for="General.SystemName" class="text-[13px] font-[550] text-[#5d6470]"></label>
+                        <input asp-for="General.SystemName" class="h-11 w-full max-w-md rounded-lg border border-[#c8d0dc] px-3 text-sm outline-none focus:border-[#0878f9]" />
+                        <span asp-validation-for="General.SystemName" class="text-xs text-red-700"></span>
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label asp-for="General.SupportEmail" class="text-[13px] font-[550] text-[#5d6470]"></label>
+                        <input asp-for="General.SupportEmail" class="h-11 w-full max-w-md rounded-lg border border-[#c8d0dc] px-3 text-sm outline-none focus:border-[#0878f9]" />
+                        <span asp-validation-for="General.SupportEmail" class="text-xs text-red-700"></span>
+                    </div>
+                </div>
+                <partial name="_SettingsActions" />
+            </form>
+        </section>
+
+        <section x-cloak x-show="activeTab === 'company'" role="tabpanel" class="w-full flex-1 rounded-2xl border border-[#e7eaf0] bg-white shadow-sm">
+            <div class="border-b border-[#e7eaf0] p-6">
+                <h2 class="text-lg font-[650]">Company or project profile</h2>
+                <p class="mt-1 text-[13px] text-[#5d6470]">For this university prototype, these identify the project rather than a registered business.</p>
+            </div>
+            <form asp-action="UpdateCompany" method="post">
+                <input asp-for="Company.ConcurrencyStamp" type="hidden" />
+                <div class="flex flex-col gap-6 p-6">
+                    <div class="flex flex-col gap-1.5">
+                        <label asp-for="Company.CompanyName" class="text-[13px] font-[550] text-[#5d6470]"></label>
+                        <input asp-for="Company.CompanyName" class="h-11 w-full max-w-md rounded-lg border border-[#c8d0dc] px-3 text-sm outline-none focus:border-[#0878f9]" />
+                        <span asp-validation-for="Company.CompanyName" class="text-xs text-red-700"></span>
+                    </div>
+                    <div class="flex flex-col gap-1.5">
+                        <label asp-for="Company.CompanyAddress" class="text-[13px] font-[550] text-[#5d6470]"></label>
+                        <input asp-for="Company.CompanyAddress" class="h-11 w-full max-w-md rounded-lg border border-[#c8d0dc] px-3 text-sm outline-none focus:border-[#0878f9]" />
+                        <span asp-validation-for="Company.CompanyAddress" class="text-xs text-red-700"></span>
+                    </div>
+                </div>
+                <partial name="_SettingsActions" />
+            </form>
+        </section>
+
+        <section x-cloak x-show="activeTab === 'notifications'" role="tabpanel" class="w-full flex-1 rounded-2xl border border-[#e7eaf0] bg-white shadow-sm">
+            <div class="border-b border-[#e7eaf0] p-6">
+                <h2 class="text-lg font-[650]">Notification refresh</h2>
+                <p class="mt-1 text-[13px] text-[#5d6470]">Controls the background process that materializes in-app notifications. This does not send email or SMS.</p>
+            </div>
+            <form asp-action="UpdateNotifications" method="post">
+                <input asp-for="Notifications.ConcurrencyStamp" type="hidden" />
+                <div class="flex flex-col gap-6 p-6">
+                    <label class="flex max-w-xl items-start gap-3 rounded-xl border border-[#e7eaf0] p-4">
+                        <input asp-for="Notifications.RefreshEnabled" class="mt-1 size-5" />
+                        <span><span class="block text-sm font-semibold">Enable background refresh</span><span class="mt-1 block text-xs leading-5 text-[#5d6470]">When disabled, existing notifications remain visible but new workflow notifications are not generated by the polling worker.</span></span>
+                    </label>
+                    <div class="flex flex-col gap-1.5">
+                        <label asp-for="Notifications.RefreshIntervalSeconds" class="text-[13px] font-[550] text-[#5d6470]"></label>
+                        <input asp-for="Notifications.RefreshIntervalSeconds" class="h-11 w-full max-w-xs rounded-lg border border-[#c8d0dc] px-3 text-sm outline-none focus:border-[#0878f9]" />
+                        <span class="text-xs text-[#5d6470]">Allowed range: 15–3600 seconds.</span>
+                        <span asp-validation-for="Notifications.RefreshIntervalSeconds" class="text-xs text-red-700"></span>
+                    </div>
+                </div>
+                <partial name="_SettingsActions" />
+            </form>
+        </section>
+
+        <section x-cloak x-show="activeTab === 'security'" role="tabpanel" class="w-full flex-1 rounded-2xl border border-[#e7eaf0] bg-white shadow-sm">
+            <div class="border-b border-[#e7eaf0] p-6">
+                <h2 class="text-lg font-[650]">Security settings</h2>
+                <p class="mt-1 text-[13px] text-[#5d6470]">Controls public account creation. Identity password and lockout rules remain enforced in server configuration.</p>
+            </div>
+            <form asp-action="UpdateSecurity" method="post">
+                <input asp-for="Security.ConcurrencyStamp" type="hidden" />
+                <div class="flex flex-col gap-5 p-6">
+                    <label class="flex max-w-xl items-start gap-3 rounded-xl border border-[#e7eaf0] p-4">
+                        <input asp-for="Security.AllowPublicRegistration" class="mt-1 size-5" />
+                        <span><span class="block text-sm font-semibold">Allow public customer registration</span><span class="mt-1 block text-xs leading-5 text-[#5d6470]">When disabled, the registration page and direct registration POSTs are blocked. Administrators can still create accounts through User Management.</span></span>
+                    </label>
+                    <div class="max-w-xl rounded-xl bg-[#f8fafc] p-4 text-xs leading-5 text-[#5d6470]">
+                        Enforced login policy: lock accounts for 15 minutes after 5 failed attempts. Passwords require at least 8 characters with upper- and lowercase letters, a number, and a symbol.
+                    </div>
+                </div>
+                <partial name="_SettingsActions" />
+            </form>
+        </section>
+
+        <section x-cloak x-show="activeTab === 'integrations'" role="tabpanel" class="w-full flex-1 rounded-2xl border border-[#e7eaf0] bg-white p-8 shadow-sm">
+            <h2 class="text-lg font-[650]">Integrations</h2>
+            <p class="mt-2 max-w-xl text-sm leading-6 text-[#5d6470]">No production integrations are configured. ScreenshotBot is a local development utility and the payment status in this prototype is not connected to a payment provider.</p>
+            <p class="mt-4 inline-flex rounded-full bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">No configurable integrations</p>
+        </section>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}
