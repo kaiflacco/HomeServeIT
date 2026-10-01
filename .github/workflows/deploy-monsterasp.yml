@@ -1,0 +1,98 @@
+name: Build and deploy to MonsterASP
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      delete_remote_files:
+        description: Delete remote files that are not in this publish output
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: npm
+          cache-dependency-path: HomeServeIT.Web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: HomeServeIT.Web
+        run: npm ci
+
+      - name: Restore .NET dependencies
+        run: dotnet restore HomeServeIT.slnx --runtime win-x86
+
+      - name: Build
+        run: dotnet build HomeServeIT.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test HomeServeIT.slnx --configuration Release --no-build --no-restore
+
+      - name: Publish web application
+        run: >-
+          dotnet publish HomeServeIT.Web/HomeServeIT.Web.csproj
+          --configuration Release
+          --output ./publish
+          --runtime win-x86
+          --no-restore
+
+      - name: Remove local configuration from publish output
+        shell: pwsh
+        run: |
+          Get-ChildItem ./publish/appsettings*.json -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+          Write-Host "Removed local appsettings files; MonsterASP environment variables will provide production configuration."
+
+      - name: Validate deployment secrets
+        shell: pwsh
+        env:
+          WEBSITE_NAME: ${{ secrets.WEBSITE_NAME }}
+          SERVER_COMPUTER_NAME: ${{ secrets.SERVER_COMPUTER_NAME }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+          SERVER_PASSWORD: ${{ secrets.SERVER_PASSWORD }}
+        run: |
+          $required = @(
+            'WEBSITE_NAME',
+            'SERVER_COMPUTER_NAME',
+            'SERVER_USERNAME',
+            'SERVER_PASSWORD'
+          )
+          $missing = @(
+            $required | Where-Object {
+              [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_))
+            }
+          )
+          if ($missing.Count -gt 0) {
+            throw "Missing MonsterASP deployment secret(s): $($missing -join ', ')"
+          }
+          Write-Host "All MonsterASP deployment secrets are configured."
+
+      - name: Deploy to MonsterASP via Web Deploy
+        uses: rasmusbuchholdt/simply-web-deploy@2.1.0
+        with:
+          website-name: ${{ secrets.WEBSITE_NAME }}
+          server-computer-name: ${{ secrets.SERVER_COMPUTER_NAME }}
+          server-username: ${{ secrets.SERVER_USERNAME }}
+          server-password: ${{ secrets.SERVER_PASSWORD }}
+          target-delete: ${{ github.event_name == 'workflow_dispatch' && inputs.delete_remote_files == true }}
