@@ -125,28 +125,33 @@ namespace HomeServeIT.Web.Areas.Admin.Controllers
                 .OrderByDescending(i => i.DateIssued)
                 .ToListAsync();
 
-            ViewBag.InventoryUsages = await _context.JobInventoryUsages
+            var usages = await _context.JobInventoryUsages
                 .Include(u => u.InventoryItem)
                 .Where(u => quotations.Select(q => q.RequestID).Contains(u.RequestID))
                 .ToListAsync();
+            ViewBag.InventoryUsages = usages;
+            ViewBag.ApprovalPreviews = quotations.ToDictionary(
+                quotation => quotation.InvoiceID,
+                quotation => QuotationPricing.Build(quotation, usages));
             return View(quotations);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ApproveQuotation(int invoiceId, decimal finalAmount, string finalBreakdown)
+        public async Task<IActionResult> ApproveQuotation(int invoiceId, decimal finalAmount, string? finalBreakdown)
         {
+            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             var quotation = await _context.Invoices
                 .Include(i => i.ServiceRequest)
                 .FirstOrDefaultAsync(i => i.InvoiceID == invoiceId
                     && i.IsQuotation
                     && i.QuotationStatus == "PendingAdmin"
-                    && i.ServiceRequest.Status != "Cancelled");
+                    && (i.ServiceRequest.Status == "Pending" || i.ServiceRequest.Status == "PendingAdminApproval"));
 
             if (quotation == null) return NotFound();
-            if (finalAmount <= 0 || string.IsNullOrWhiteSpace(finalBreakdown))
+            if (finalAmount <= 0)
             {
-                TempData["ErrorMessage"] = "Enter a valid final amount and customer-facing breakdown.";
+                TempData["ErrorMessage"] = "The quotation total must be a positive, server-calculated amount.";
                 return RedirectToAction(nameof(Quotations));
             }
 
@@ -161,13 +166,42 @@ namespace HomeServeIT.Web.Areas.Admin.Controllers
                 return RedirectToAction(nameof(Quotations));
             }
 
-            quotation.TotalAmount = finalAmount;
-            quotation.BreakdownDetails = finalBreakdown.Trim();
+            // The amount displayed in the approval form is an untrusted browser value.
+            // Keep the technician's server-stored labor quote, but recompute parts
+            // from the current catalog price for each authorized allocation. The
+            // browser amount is never trusted, even when it is forged.
+            var preview = QuotationPricing.Build(quotation, allocations);
+            if (preview.TotalAmount <= 0 || decimal.Round(finalAmount, 2, MidpointRounding.AwayFromZero) != preview.TotalAmount)
+            {
+                TempData["ErrorMessage"] = "The quotation changed while it was open. Review the server-calculated total and try again.";
+                return RedirectToAction(nameof(Quotations));
+            }
+
+            foreach (var allocation in allocations)
+                allocation.UnitPrice = allocation.InventoryItem.UnitPrice;
+
+            var approver = await _userManager.GetUserAsync(User);
+            if (approver == null)
+            {
+                await transaction.RollbackAsync();
+                return Forbid();
+            }
+
+            quotation.TotalAmount = preview.TotalAmount;
+            quotation.BreakdownDetails = preview.Breakdown;
             quotation.QuotationStatus = "ApprovedByAdmin";
             quotation.PaymentStatus = "Unpaid";
             quotation.ServiceRequest.Status = "Pending";
+            _context.ApplicationSettingAudits.Add(new ApplicationSettingAudit
+            {
+                Section = "QuotationApproval",
+                ChangedFields = $"InvoiceID={quotation.InvoiceID}; RequestID={quotation.RequestID}; TotalAmount={quotation.TotalAmount:0.00}; Status=ApprovedByAdmin",
+                ActorUserId = approver.Id,
+                ChangedAtUtc = DateTime.UtcNow
+            });
 
             await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
             TempData["SuccessMessage"] = $"Quotation QT-{quotation.DateIssued.Year}-{quotation.InvoiceID:D4} was approved and sent to the customer.";
             return RedirectToAction(nameof(Quotations));
         }

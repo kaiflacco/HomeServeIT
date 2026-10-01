@@ -237,6 +237,13 @@ public class ServiceRequestsController : Controller
             return RedirectToAction(nameof(Index));
         }
 
+        if (invoice.PaymentStatus != "Unpaid" || invoice.ServiceRequest.Status != "Pending")
+        {
+            await transaction.RollbackAsync();
+            TempData["ErrorMessage"] = "This invoice is not available to start payment from its current state.";
+            return RedirectToAction(nameof(Index));
+        }
+
         var inventoryResult = await _jobInventoryService.DeductForJobStartAsync(
             invoice.RequestID,
             user.FullName ?? user.Email ?? "Customer");

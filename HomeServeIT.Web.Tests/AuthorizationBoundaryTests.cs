@@ -2,6 +2,8 @@ using HomeServeIT.Web.Constants;
 using HomeServeIT.Web.Controllers.Api;
 using Microsoft.AspNetCore.Authorization;
 using AdminOperationsController = HomeServeIT.Web.Areas.Admin.Controllers.OperationsController;
+using AdminFinanceController = HomeServeIT.Web.Areas.Admin.Controllers.FinanceController;
+using CustomerQuotationsController = HomeServeIT.Web.Areas.Customer.Controllers.QuotationsController;
 using CustomerServiceRequestsController = HomeServeIT.Web.Areas.Customer.Controllers.ServiceRequestsController;
 using TechnicianAssignedJobsController = HomeServeIT.Web.Areas.Technician.Controllers.AssignedJobsController;
 
@@ -11,7 +13,9 @@ public sealed class AuthorizationBoundaryTests
 {
     [Theory]
     [InlineData(typeof(AdminOperationsController), Roles.Administrator)]
+    [InlineData(typeof(AdminFinanceController), Roles.Administrator)]
     [InlineData(typeof(CustomerServiceRequestsController), Roles.Customer)]
+    [InlineData(typeof(CustomerQuotationsController), Roles.Customer)]
     [InlineData(typeof(TechnicianAssignedJobsController), Roles.Technician)]
     [InlineData(typeof(HomeServeApiController), Roles.Administrator)]
     public void SensitiveController_RequiresItsExpectedIdentityRole(Type controllerType, string expectedRole)

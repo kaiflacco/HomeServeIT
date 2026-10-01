@@ -78,7 +78,7 @@
                     </div>
                 </div>
 
-                @if (Model.PaymentStatus == "Unpaid")
+                @if (Model.PaymentStatus == "Unpaid" && (Model.QuotationStatus is "ApprovedByAdmin" or "Approved"))
                 {
                     <div class="flex flex-col gap-[16px] pt-[20px] border-t border-[#e7eaf0]">
                         <label class="flex items-start gap-[12px] cursor-pointer group">
@@ -98,6 +98,12 @@
                            class="w-full py-[12px] rounded-[8px] font-['Inter'] font-semibold text-[15px] text-center transition-colors">
                             Agree and Pay
                         </a>
+                    </div>
+                }
+                else if (Model.PaymentStatus == "Unpaid")
+                {
+                    <div class="pt-[20px] border-t border-[#e7eaf0]">
+                        <p class="font-['Inter'] text-[13px] leading-[20px] text-[#8a929e]">This quotation is waiting for administrator approval. You’ll be able to continue when the review is complete.</p>
                     </div>
                 }
                 else
