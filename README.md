@@ -280,7 +280,7 @@ Customer Submits Request
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/<your-username>/HomeServeIT.git
+git clone https://github.com/kaiflacco/HomeServeIT.git
 cd "HomeServeIT"
 ```
 
